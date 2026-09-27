@@ -151,8 +151,24 @@ function validProfilePatch(patch: Record<string, unknown>): Record<string, unkno
   };
 }
 
-test("package version is 1.3.0", async () => {
-  assert.equal((await readJson("package.json")).version, "1.3.0");
+test("package version is 1.3.1", async () => {
+  assert.equal((await readJson("package.json")).version, "1.3.1");
+});
+
+test("claude-opus-5.5 has exact task-aware effort categories and one model", async () => {
+  const manifest = await packagedManifest();
+  const profile = (await packagedProfiles(manifest))["claude-opus-5.5"];
+  const categories: Record<string, string[]> = {
+    low: ["sdd-init", "sdd-onboard", "sdd-archive", "sdd-status", "sdd-sync"],
+    medium: ["sdd-explore", "sdd-spec", "sdd-tasks", "sdd-apply", "gentle-ai-explore", "gentle-ai-worker", "orchestrator", "review-readability"],
+    high: ["sdd-research", "sdd-proposal", "sdd-design", "sdd-verify", "gentle-ai-verify", "review-risk", "review-resilience", "review-reliability", "review-refuter", "review-validator", "jd-judge-a", "jd-judge-b"],
+  };
+  assert.deepEqual(Object.keys(profile).sort(), managedAgents(manifest).sort());
+  for (const [thinking, agents] of Object.entries(categories)) {
+    assert.deepEqual(Object.entries(profile).filter(([, entry]) => entry.thinking === thinking).map(([agent]) => agent).sort(), agents.sort(), thinking);
+  }
+  assert.ok(Object.values(profile).every(({ model }) => model === "claude-bridge/claude-opus-5-5"));
+  assert.ok(Object.values(profile).every(({ thinking }) => !["max", "xhigh", "minimal", "off"].includes(thinking)));
 });
 
 test("packaged manifest defaults to openaigentle and registers named profiles plus compatibility aliases", async () => {
@@ -268,21 +284,17 @@ test("openaigentle preserves the supplied GPT-6 mapping in canonical and runtime
       [agent, { model: entry.model, effort: entry.thinking }])));
 });
 
-test("claude-opus-5.5 is standalone, unpaired, and preserves every openaigentle effort", async () => {
+test("claude-opus-5.5 is standalone, unpaired, and preserves its calibrated effort at runtime", async () => {
   const manifest = await packagedManifest();
   const profiles = await packagedProfiles(manifest);
-  const baseline = profiles.openaigentle;
-  const expected = Object.fromEntries(expectedAgents.map((agent) => [agent, {
-    model: "claude-bridge/claude-opus-5-5", thinking: baseline[agent].thinking,
-  }]));
-  assert.deepEqual(profiles["claude-opus-5.5"], expected);
+  const expected = profiles["claude-opus-5.5"];
   assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, "claude-opus-5.5"), false);
   assert.deepEqual(deriveCanonicalProfileForSelection("claude-opus-5.5", profiles, manifest), expected);
   assert.deepEqual(deriveRuntimeModelProfilesForSelection("claude-opus-5.5", profiles, manifest),
     Object.fromEntries(expectedAgents.map((agent) => [agent, {
-      model: "claude-bridge/claude-opus-5-5", effort: baseline[agent].thinking,
+      model: "claude-bridge/claude-opus-5-5", effort: expected[agent].thinking,
     }])));
-  assert.equal(expected["sdd-archive"].thinking, "max");
+  assert.equal(expected["sdd-archive"].thinking, "low");
 });
 
 test("manifest validation rejects unsupported versions, missing groups, duplicate names, and reserved commands", () => {

@@ -44,7 +44,7 @@ The existing paired profiles route judges by provider and cost lane. `gpt-5.5-po
 | Profile | Use when |
 |---|---|
 | `gpt-5.5-powerful` | You want GPT-5.5 for every managed agent, including reviewers and judges, with medium orchestrator/lightweight, xhigh reasoning, and high code effort. |
-| `claude-opus-5.5` | You want `claude-bridge/claude-opus-5-5` for every managed agent, with the exact `openaigentle` per-agent thinking levels, including `max` for `sdd-archive`. |
+| `claude-opus-5.5` | You want `claude-bridge/claude-opus-5-5` for every managed agent, with task-aware low effort for routine phases, medium for exploration, specification, implementation, and readability, and high for research, design, verification, and risk-focused review. |
 | `gpt-5.6-low-cost` | You want the cheapest OpenAI-family profile for routine exploration, small fixes, docs, or low-risk maintenance. |
 | `gpt-5.6-recommended` | You want the default balanced OpenAI profile for normal ODD/SDD work. Start here unless cost or difficulty says otherwise. |
 | `gpt-5.6-powerful` | You need stronger reasoning for complex design, risky refactors, broad verification, or tasks where mistakes are expensive. |
