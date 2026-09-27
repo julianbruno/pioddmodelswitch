@@ -32,7 +32,7 @@ Add a selectable `claude-opus-5.5` profile that uses only `claude-bridge/claude-
 
 ## Tasks
 - [x] T1: Add, document, verify, commit, and install the initial Claude Opus 5.5-only profile.
-- [ ] T2: Correct thinking levels to be task-aware, verify, commit, and reinstall version 1.3.1.
+- [x] T2: Correct thinking levels to be task-aware, verify, commit, and reinstall version 1.3.1.
 
 ## Acceptance criteria
 - `claude-opus-5.5` is selectable through the existing named-profile mechanism.
@@ -62,6 +62,9 @@ Add a selectable `claude-opus-5.5` profile that uses only `claude-bridge/claude-
 - T2 independent verifier PASS: focused manifest/installer tests passed 21/21; full suite passed 58/58; shell syntax and whitespace checks passed; exact 5 low / 8 medium / 12 high groups and absence of `max` were confirmed.
 - T2 runtime harness before installation: N/A because isolated suites exercise profile derivation; real Pi-home installation remains the explicitly requested final step.
 - T2 rollback boundary: restore the 1.3.0 profile values/docs/tests and package version; profile registration and all unrelated mappings remain unchanged.
+- T2 work-unit commit: `46e6a40` (`fix(profiles): calibrate Opus thinking by task`).
+- Version 1.3.1 installation completed in `/home/julian/.pi`; backup: `/home/julian/.pi/backups/jb-sdd-odd-models-2026-09-27T21-52-35-405Z-2664987`.
+- T2 post-install verifier PASS: installed profile/manifest/extension/helper bytes match the repository; exact 5 low / 8 medium / 12 high task groups were confirmed; all 25 agents use Opus 5.5; no forbidden levels exist; active canonical/runtime mappings remain on default `openaigentle`.
 
 ## Next step
-Commit the verified task-aware calibration, reinstall version 1.3.1, and read back the corrected profile.
+Restart or reload Pi, then run `/jb-sdd-odd-models preview claude-opus-5.5` and `/jb-sdd-odd-models doctor` in the refreshed process.
