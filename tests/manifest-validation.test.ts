@@ -151,15 +151,15 @@ function validProfilePatch(patch: Record<string, unknown>): Record<string, unkno
   };
 }
 
-test("package version is 1.2.0", async () => {
-  assert.equal((await readJson("package.json")).version, "1.2.0");
+test("package version is 1.3.0", async () => {
+  assert.equal((await readJson("package.json")).version, "1.3.0");
 });
 
 test("packaged manifest defaults to openaigentle and registers named profiles plus compatibility aliases", async () => {
   const manifest = await packagedManifest();
   const catalog = await packagedNamedProfiles();
   const namedProfileNames = catalog.profiles.map((profile) => profile.name);
-  const expectedRegisteredNames = ["openai", "openaigentle", "grok", ...namedProfileNames];
+  const expectedRegisteredNames = ["openai", "openaigentle", "grok", ...namedProfileNames, "claude-opus-5.5"];
   assert.ok(namedProfileNames.includes("gpt-5.5-powerful"));
 
   assert.equal(manifest.schemaVersion, 1);
@@ -266,6 +266,23 @@ test("openaigentle preserves the supplied GPT-6 mapping in canonical and runtime
   assert.deepEqual(deriveRuntimeModelProfilesForSelection(manifest.defaultProfile, profiles, manifest),
     Object.fromEntries(Object.entries(expected).map(([agent, entry]) =>
       [agent, { model: entry.model, effort: entry.thinking }])));
+});
+
+test("claude-opus-5.5 is standalone, unpaired, and preserves every openaigentle effort", async () => {
+  const manifest = await packagedManifest();
+  const profiles = await packagedProfiles(manifest);
+  const baseline = profiles.openaigentle;
+  const expected = Object.fromEntries(expectedAgents.map((agent) => [agent, {
+    model: "claude-bridge/claude-opus-5-5", thinking: baseline[agent].thinking,
+  }]));
+  assert.deepEqual(profiles["claude-opus-5.5"], expected);
+  assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, "claude-opus-5.5"), false);
+  assert.deepEqual(deriveCanonicalProfileForSelection("claude-opus-5.5", profiles, manifest), expected);
+  assert.deepEqual(deriveRuntimeModelProfilesForSelection("claude-opus-5.5", profiles, manifest),
+    Object.fromEntries(expectedAgents.map((agent) => [agent, {
+      model: "claude-bridge/claude-opus-5-5", effort: baseline[agent].thinking,
+    }])));
+  assert.equal(expected["sdd-archive"].thinking, "max");
 });
 
 test("manifest validation rejects unsupported versions, missing groups, duplicate names, and reserved commands", () => {

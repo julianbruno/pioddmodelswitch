@@ -125,6 +125,10 @@
     {
       "name": "gpt-astra-only-powerful",
       "modelsFile": "models.gpt-astra-only-powerful.json"
+    },
+    {
+      "name": "claude-opus-5.5",
+      "modelsFile": "models.claude-opus-5.5.json"
     }
   ]
 }

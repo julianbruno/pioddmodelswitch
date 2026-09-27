@@ -22,7 +22,7 @@ These legacy pairings preserve the previous behavior.
 
 ## Opposite-provider judge routing for named profiles
 
-The existing paired profiles route judges by provider and cost lane. `gpt-5.5-powerful` is deliberately unpaired: its reviewers and judges use GPT-5.5 too.
+The existing paired profiles route judges by provider and cost lane. `gpt-5.5-powerful` and `claude-opus-5.5` are deliberately unpaired: their reviewers and judges use their selected model too.
 
 | Selected profile | Judge/reviewer profile |
 |---|---|
@@ -44,6 +44,7 @@ The existing paired profiles route judges by provider and cost lane. `gpt-5.5-po
 | Profile | Use when |
 |---|---|
 | `gpt-5.5-powerful` | You want GPT-5.5 for every managed agent, including reviewers and judges, with medium orchestrator/lightweight, xhigh reasoning, and high code effort. |
+| `claude-opus-5.5` | You want `claude-bridge/claude-opus-5-5` for every managed agent, with the exact `openaigentle` per-agent thinking levels, including `max` for `sdd-archive`. |
 | `gpt-5.6-low-cost` | You want the cheapest OpenAI-family profile for routine exploration, small fixes, docs, or low-risk maintenance. |
 | `gpt-5.6-recommended` | You want the default balanced OpenAI profile for normal ODD/SDD work. Start here unless cost or difficulty says otherwise. |
 | `gpt-5.6-powerful` | You need stronger reasoning for complex design, risky refactors, broad verification, or tasks where mistakes are expensive. |

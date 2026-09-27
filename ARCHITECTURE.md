@@ -10,7 +10,7 @@ This package is a small configuration-and-extension layer. It does not bundle Pi
 | `extensions/model-profiles/core.ts` | Owns manifest/profile validation, opposite-provider judge selection, and canonical/runtime derivation. | Pi extension registration. |
 | `extensions/model-profiles/transaction.ts` | Owns read/write transaction locking, active journal, history, guarded undo, recovery, and read-only inspection diagnostics. | Choosing model profiles or repairing malformed state automatically. |
 | `config/model-profiles.manifest.json` | Defines schema version, managed agent groups, opposite-provider judge routing, default profile, reserved command names, and registered profile files. | Runtime behavior outside declared mappings. |
-| `config/models.<profile>.json` | Defines each named canonical model profile; version 1.2 materializes every profile from `config/named-profiles.json` plus legacy aliases. Active files are derived from the manifest default at install time. | Runtime behavior or user overrides. |
+| `config/models.<profile>.json` | Defines each canonical model profile; version 1.3 materializes every role-based profile from `config/named-profiles.json`, legacy aliases, and standalone `claude-opus-5.5`. Active files are derived from the manifest default at install time. | Runtime behavior or user overrides. |
 | `install/install.sh` and `install/model-profiles-install.ts` | Enforce the Node strip-types minimum, validate assets, back up changed targets, install extension/helper layout, and perform a merge-friendly runtime update. | Installing Gentle Pi, credentials, or providers. |
 | Documentation | Explains operation, recovery, and limitations. | A license grant; see `NOTICE.md`. |
 
