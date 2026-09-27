@@ -151,8 +151,8 @@ function validProfilePatch(patch: Record<string, unknown>): Record<string, unkno
   };
 }
 
-test("package version is 1.1.0", async () => {
-  assert.equal((await readJson("package.json")).version, "1.1.0");
+test("package version is 1.2.0", async () => {
+  assert.equal((await readJson("package.json")).version, "1.2.0");
 });
 
 test("packaged manifest defaults to openaigentle and registers named profiles plus compatibility aliases", async () => {
@@ -160,6 +160,7 @@ test("packaged manifest defaults to openaigentle and registers named profiles pl
   const catalog = await packagedNamedProfiles();
   const namedProfileNames = catalog.profiles.map((profile) => profile.name);
   const expectedRegisteredNames = ["openai", "openaigentle", "grok", ...namedProfileNames];
+  assert.ok(namedProfileNames.includes("gpt-5.5-powerful"));
 
   assert.equal(manifest.schemaVersion, 1);
   assert.equal(manifest.defaultProfile, "openaigentle");
@@ -223,6 +224,26 @@ test("generated packaged named profiles equal role expansion from named-profiles
       assert.equal(entry.thinking, entry.thinking.trim());
     }
   }
+});
+
+test("gpt-5.5-powerful keeps every managed agent on GPT-5.5 without opposite-provider judges", async () => {
+  const manifest = await packagedManifest();
+  const catalog = await packagedNamedProfiles();
+  const named = catalog.profiles.find((profile) => profile.name === "gpt-5.5-powerful");
+  assert.ok(named);
+  const efforts = { orquestador: "medium", razonamiento: "xhigh", codigo: "high", liviano: "medium" };
+  for (const [role, effort] of Object.entries(efforts)) {
+    assert.deepEqual(named.roles[role], { model: "openai-codex/gpt-5.5", thinking: effort });
+  }
+  const profiles = await packagedProfiles(manifest);
+  const expected = expectedFullProfile(named);
+  assert.deepEqual(Object.keys(profiles[named.name]), expectedAgents);
+  assert.deepEqual(profiles[named.name], expected);
+  assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, named.name), false);
+  assert.deepEqual(deriveCanonicalProfileForSelection(named.name, profiles, manifest), expected);
+  assert.deepEqual(deriveRuntimeModelProfilesForSelection(named.name, profiles, manifest),
+    Object.fromEntries(Object.entries(expected).map(([agent, entry]) =>
+      [agent, { model: "openai-codex/gpt-5.5", effort: entry.thinking }])));
 });
 
 test("openaigentle preserves the supplied GPT-6 mapping in canonical and runtime selections", async () => {

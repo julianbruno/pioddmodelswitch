@@ -1,10 +1,10 @@
 # Profile alias relationships
 
-This document records how legacy profile names relate to the version 1.1 selectable profiles.
+This document records how legacy profile names relate to the version 1.2 selectable profiles.
 
 ## Legacy aliases
 
-| Legacy profile | Comparable 1.1 profile | Notes |
+| Legacy profile | Comparable 1.2 profile | Notes |
 |---|---|---|
 | `openai` | `gpt-5.6-recommended` | Backward-compatible OpenAI alias. Prefer `gpt-5.6-recommended` for new usage. |
 | `grok` | `grok-recommended` | Backward-compatible Grok alias. Prefer `grok-recommended` for new usage. |
@@ -20,9 +20,9 @@ When `oppositeProviderJudges.enabled` is `true`:
 
 These legacy pairings preserve the previous behavior.
 
-## Opposite-provider judge routing for 1.1 profiles
+## Opposite-provider judge routing for named profiles
 
-Version 1.1 profiles pair judges by provider and cost lane:
+The existing paired profiles route judges by provider and cost lane. `gpt-5.5-powerful` is deliberately unpaired: its reviewers and judges use GPT-5.5 too.
 
 | Selected profile | Judge/reviewer profile |
 |---|---|
@@ -43,6 +43,7 @@ Version 1.1 profiles pair judges by provider and cost lane:
 
 | Profile | Use when |
 |---|---|
+| `gpt-5.5-powerful` | You want GPT-5.5 for every managed agent, including reviewers and judges, with medium orchestrator/lightweight, xhigh reasoning, and high code effort. |
 | `gpt-5.6-low-cost` | You want the cheapest OpenAI-family profile for routine exploration, small fixes, docs, or low-risk maintenance. |
 | `gpt-5.6-recommended` | You want the default balanced OpenAI profile for normal ODD/SDD work. Start here unless cost or difficulty says otherwise. |
 | `gpt-5.6-powerful` | You need stronger reasoning for complex design, risky refactors, broad verification, or tasks where mistakes are expensive. |
@@ -60,4 +61,4 @@ Version 1.1 profiles pair judges by provider and cost lane:
 
 ## Recommendation
 
-Use the explicit 1.1 profile names for new work. Keep `openai` and `grok` only for compatibility with older commands, scripts, or habits.
+Use the explicit 1.2 profile names for new work. Keep `openai` and `grok` only for compatibility with older commands, scripts, or habits.

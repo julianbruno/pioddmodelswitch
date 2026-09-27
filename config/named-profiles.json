@@ -8,6 +8,19 @@
   },
   "profiles": [
     {
+      "name": "gpt-5.5-powerful",
+      "label": "Powerful",
+      "family": "gpt-5.5",
+      "recommended": false,
+      "blurb": "GPT-5.5 for every agent, including reviewers and judges",
+      "roles": {
+        "orquestador": { "model": "openai-codex/gpt-5.5", "thinking": "medium" },
+        "razonamiento": { "model": "openai-codex/gpt-5.5", "thinking": "xhigh" },
+        "codigo": { "model": "openai-codex/gpt-5.5", "thinking": "high" },
+        "liviano": { "model": "openai-codex/gpt-5.5", "thinking": "medium" }
+      }
+    },
+    {
       "name": "gpt-5.6-low-cost",
       "label": "Low-cost",
       "family": "gpt-5.6",

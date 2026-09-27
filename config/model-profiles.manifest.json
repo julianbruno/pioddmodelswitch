@@ -75,6 +75,10 @@
       "modelsFile": "models.grok.json"
     },
     {
+      "name": "gpt-5.5-powerful",
+      "modelsFile": "models.gpt-5.5-powerful.json"
+    },
+    {
       "name": "gpt-5.6-low-cost",
       "modelsFile": "models.gpt-5.6-low-cost.json"
     },
