@@ -30,7 +30,7 @@ Add a selectable `claude-opus-5.5` profile that uses only `claude-bridge/claude-
 - Additional checks: `bash -n install/install.sh` and `git diff --check`.
 
 ## Tasks
-- [ ] T1: Add, document, verify, commit, and install the Claude Opus 5.5-only profile.
+- [x] T1: Add, document, verify, commit, and install the Claude Opus 5.5-only profile.
 
 ## Acceptance criteria
 - `claude-opus-5.5` is selectable through the existing named-profile mechanism.
@@ -51,6 +51,9 @@ Add a selectable `claude-opus-5.5` profile that uses only `claude-bridge/claude-
 - Native risk assessment was unavailable because intended untracked files were not declared; with RDD off, the required independent verifier completed successfully.
 - Runtime harness before installation: N/A because the test suites cover declarative selection/expansion and real Pi-home mutation is reserved for the explicitly requested installation step.
 - Rollback boundary: remove the standalone profile file and its manifest/test/documentation registration, and restore package version 1.2.0; existing profiles and pairings remain independent.
+- Work-unit commit: `76a1a5f` (`feat(profiles): add Claude Opus 5.5 profile`).
+- Installation completed in `/home/julian/.pi`; backup: `/home/julian/.pi/backups/jb-sdd-odd-models-2026-09-27T21-07-36-887Z-2619079`.
+- Post-install verifier PASS: installed manifest/profile/extension/helper bytes match the repository; the Claude profile contains exactly 25 agents with matching `openaigentle` thinking values; active canonical/runtime mappings remain on default `openaigentle`; repository was clean before this final tracker update.
 
 ## Next step
-Commit the verified work unit, install it into the active Pi home, and read back the installed profile.
+Restart or reload Pi, then run `/jb-sdd-odd-models preview claude-opus-5.5` and `/jb-sdd-odd-models doctor` in the refreshed process.
