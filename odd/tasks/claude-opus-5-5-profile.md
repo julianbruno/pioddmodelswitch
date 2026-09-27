@@ -38,7 +38,7 @@ Add a selectable `claude-opus-5.5` profile that uses only `claude-bridge/claude-
 ## Tasks
 - [x] T1: Add, document, verify, commit, and install the initial Claude Opus 5.5-only profile.
 - [x] T2: Correct thinking levels to be task-aware, verify, commit, and reinstall version 1.3.1.
-- [ ] T3: Align the current Pi session from the selected profile's effective orchestrator entry, fail closed, verify, commit, and reinstall version 1.4.0.
+- [x] T3: Align the current Pi session from the selected profile's effective orchestrator entry, fail closed, verify, commit, and reinstall version 1.4.0.
 
 ## Acceptance criteria
 - `claude-opus-5.5` is selectable through the existing named-profile mechanism.
@@ -80,6 +80,10 @@ Add a selectable `claude-opus-5.5` profile that uses only `claude-bridge/claude-
 - T3 reload-failure test confirms aligned session and files remain active without compensation and the user receives manual reload/restart guidance.
 - T3 runtime harness before installation: isolated command and installer seams exercise the runtime boundary; live installed-session selection remains pending until the plugin is reinstalled and Pi reloads.
 - T3 rollback boundary: restore the 1.3.1 command behavior/tests/docs/package version; profile data, registration, and T1/T2 mappings remain unchanged.
+- T3 work-unit commit: `ce683b6` (`feat(profiles): align current session on switch`).
+- Version 1.4.0 installation completed in `/home/julian/.pi`; backup: `/home/julian/.pi/backups/jb-sdd-odd-models-2026-09-27T22-25-27-907Z-2700985`.
+- T3 post-install verifier PASS: all 21 installed assets match repository bytes; active canonical/runtime mappings remain on default `openaigentle`; the installed extension contains the fail-closed current-session alignment behavior.
+- Live transition remains intentionally user-driven because the running Pi process must reload the newly installed extension before the command can exercise it.
 
 ## Next step
-Commit the verified 1.4.0 session-alignment work unit, reinstall it, and read back the installed extension before live reload.
+Reload or restart Pi, then run `/jb-sdd-odd-models claude-opus-5.5`; the current session should switch to `claude-bridge/claude-opus-5-5` with `medium` thinking, followed by `/jb-sdd-odd-models doctor`.
