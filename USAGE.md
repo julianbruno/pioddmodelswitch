@@ -11,7 +11,7 @@ The command reports, previews, diagnoses, switches, undoes, or recovers the glob
 | `/jb-sdd-odd-models doctor` | Performs read-only diagnostics for manifest/profile shape, active canonical/runtime state, transaction journals/locks, local Pi catalog presence, effort compatibility, and auth configuration evidence. |
 | `/jb-sdd-odd-models list` | Lists registered profiles and the default profile. Read-only. |
 | `/jb-sdd-odd-models preview <profile>` | Shows managed canonical/runtime before → after mappings for a profile. Read-only. |
-| `/jb-sdd-odd-models <profile>` | Validates registered profiles and current files, writes the selected profile to canonical and runtime configuration, then reloads Pi. No-op when already aligned. |
+| `/jb-sdd-odd-models <profile>` | Validates registered profiles and current files, aligns this Pi session with the effective `orchestrator` model and standard thinking level, writes changed canonical/runtime mappings, then reloads Pi only if files changed. No-op when session and files already match. |
 | `/jb-sdd-odd-models undo` | Reverts the last completed profile transaction only if both files still match the recorded transaction output, then reloads Pi. |
 | `/jb-sdd-odd-models recover` | Finishes, records, or clears an interrupted profile transaction when the current file bytes match a safe recorded state, then reloads Pi when recovery changed state. |
 | `/jb-sdd-odd-models <invalid>` | Displays an unknown-argument warning and usage. Read-only. |
@@ -73,7 +73,7 @@ The preview shows each managed agent's current canonical entry and runtime entry
 /jb-sdd-odd-models openaigentle
 ```
 
-On success, the selected SDD/ODD mappings are written and Pi reloads. The canonical profile uses `thinking`; the runtime mapping receives the same value as `effort`. If the selected profile is already active, the command leaves file bytes and mtimes untouched and does not reload.
+On success, the selected SDD/ODD mappings are written and Pi reloads only for changed files. The canonical profile uses `thinking`; the runtime mapping receives the same value as `effort`. Already-active files stay untouched, but direct selection still aligns the current session. Missing model/auth, unavailable rollback model, unsupported orchestrator thinking, and clamped thinking fail before file mutation. A later file-switch failure attempts session restoration and reports restoration errors.
 
 ## Add a registered profile
 
@@ -81,7 +81,7 @@ To add a third profile such as `local`, keep the same active managed-agent cover
 
 1. Add `{ "name": "local", "modelsFile": "models.local.json" }` to `model-profiles.manifest.json`.
 2. Create `models.local.json` with exactly every agent listed under the manifest's `managedAgentGroups` plus the configured `oppositeProviderJudges.agents` when that block is enabled.
-3. Use `{ "model": "provider/model", "thinking": "max" }` for each agent, choosing an effort appropriate for that model. The package accepts any nonempty, already-trimmed effort string and copies it verbatim; it does not trim, lowercase, whitelist, or downgrade values. The installed runtime or provider may reject unsupported levels even after a successful switch.
+3. Use `{ "model": "provider/model", "thinking": "max" }` for each agent, choosing an effort appropriate for that model. The package accepts any nonempty, already-trimmed effort string and copies it verbatim; it does not trim, lowercase, whitelist, or downgrade values. Direct switching rejects nonstandard `orchestrator` thinking before mutation; other agents' efforts remain unrestricted and the installed runtime or provider may reject unsupported levels even after a successful switch.
 4. Restart or reinstall so the installed manifest/profile files are copied into Pi home.
 5. Run `/jb-sdd-odd-models list`, `/jb-sdd-odd-models preview local`, and `/jb-sdd-odd-models doctor`.
 

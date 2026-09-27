@@ -667,11 +667,55 @@ export default function sddModelProfiles(pi: ExtensionAPI, options: ModelProfile
       }
 
       try {
-        const result = await switchProfile(paths, parsed.name);
-        if (result === "noop") {
-          ctx.ui.notify(`SDD/ODD ${parsed.name} profile is already active; no reload needed.`, "info");
-          return;
-        }
+        const registry = await loadRegistry(paths);
+        if (!selectedProfile(registry, parsed.name)) throw new Error(`Unknown profile: ${parsed.name}\n${usage(registry.manifest)}`);
+        const entry = deriveCanonicalProfileForSelection(parsed.name, registry.profiles, registry.manifest).orchestrator;
+        if (!entry) throw new Error("Selected profile has no orchestrator entry.");
+        const original = ctx.model;
+        if (!original) throw new Error("Current Pi session model unavailable for rollback.");
+        const originalThinking = pi.getThinkingLevel();
+        const levels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const satisfies readonly Parameters<ExtensionAPI["setThinkingLevel"]>[0][];
+        if (!levels.includes(entry.thinking as typeof levels[number])) throw new Error(`Orchestrator thinking '${entry.thinking}' is not a standard Pi thinking level.`);
+        const target = splitModelIdentifier(entry.model);
+        const model = target && ctx.modelRegistry.find(target.provider, target.modelId);
+        if (!model) throw new Error(`Orchestrator model ${entry.model} is missing from the Pi model registry.`);
+        const changedModel = original.provider !== target!.provider || original.id !== target!.modelId;
+        if (changedModel && !ctx.modelRegistry.find(original.provider, original.id)) throw new Error("Current Pi session model is missing from registry; rollback unavailable.");
+        const changedThinking = originalThinking !== entry.thinking;
+        let modelApplied = false;
+        let thinkingAttempted = false;
+        const restore = async (error: unknown): Promise<never> => {
+          const failures: string[] = [];
+          try {
+            if (modelApplied) {
+              const previous = ctx.modelRegistry.find(original.provider, original.id);
+              if (!previous || !await pi.setModel(previous)) failures.push("original model could not be restored");
+            }
+          } catch (cause) { failures.push(`original model restoration threw: ${String(cause)}`); }
+          try {
+            if (modelApplied || thinkingAttempted) {
+              pi.setThinkingLevel(originalThinking);
+              if (pi.getThinkingLevel() !== originalThinking) failures.push("original thinking could not be restored");
+            }
+          } catch (cause) { failures.push(`original thinking restoration threw: ${String(cause)}`); }
+          throw new Error(`${error instanceof Error ? error.message : String(error)}${failures.length ? `; session restoration failed: ${failures.join('; ')}` : modelApplied || thinkingAttempted ? "; original session restored" : ""}`);
+        };
+        try {
+          if (changedModel) {
+            if (!await pi.setModel(model)) throw new Error(`Pi could not activate ${entry.model} (authentication may be missing).`);
+            modelApplied = true;
+          }
+          if (changedModel || changedThinking) {
+            thinkingAttempted = true;
+            pi.setThinkingLevel(entry.thinking as typeof levels[number]);
+          }
+          if (pi.getThinkingLevel() !== entry.thinking) throw new Error(`Pi thinking readback differs from ${entry.thinking} (possibly clamped).`);
+          const result = await switchProfile(paths, parsed.name);
+          if (result === "noop") {
+            ctx.ui.notify(`SDD/ODD ${parsed.name} profile is already active; no reload needed.`, "info");
+            return;
+          }
+        } catch (error) { await restore(error); }
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
         return;
@@ -684,7 +728,7 @@ export default function sddModelProfiles(pi: ExtensionAPI, options: ModelProfile
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(
-          `Reload failed (${detail}), but the ${parsed.name} profile files remain active. Run /reload manually or restart Pi.`,
+          `Reload failed (${detail}), but the ${parsed.name} profile files and current session remain active. Run /reload manually or restart Pi.`,
           "error",
         );
       }

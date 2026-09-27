@@ -229,17 +229,49 @@ test("dynamic third profile installs and the installed command can status and sw
 
   const imported = await import(`${join(piHome, "agent", "extensions", "sdd-model-profiles.ts")}?${Date.now()}`);
   const commands = new Map<string, any>();
-  imported.default({ registerCommand: (name: string, command: any) => commands.set(name, command) }, { piHome });
+  const installedDefault = (await readJson(join(piHome, "gentle-ai", "models.json"))).orchestrator;
+  const [defaultProvider, defaultId] = installedDefault.model.split("/");
+  const localOrchestrator = localProfile.orchestrator;
+  const [localProvider, localId] = localOrchestrator.model.split("/");
+  const availableModels = [
+    { provider: defaultProvider, id: defaultId },
+    { provider: localProvider, id: localId },
+  ];
+  let sessionModel = availableModels[0];
+  let thinkingLevel = installedDefault.thinking;
+  const modelChanges: string[] = [];
+  imported.default({
+    registerCommand: (name: string, command: any) => commands.set(name, command),
+    setModel: async (model: { provider: string; id: string }) => {
+      if (!availableModels.includes(model)) return false;
+      sessionModel = model;
+      modelChanges.push(`${model.provider}/${model.id}`);
+      return true;
+    },
+    getThinkingLevel: () => thinkingLevel,
+    setThinkingLevel: (level: string) => { thinkingLevel = level; },
+  }, { piHome });
   const command = commands.get("jb-sdd-odd-models");
   assert.ok(command);
   const notifications: Array<{ message: string; level: string }> = [];
   let reloads = 0;
-  const ctx = { cwd: piHome, ui: { notify: (message: string, level: string) => notifications.push({ message, level }) }, reload: async () => { reloads += 1; } };
+  const ctx = {
+    cwd: piHome,
+    get model() { return sessionModel; },
+    modelRegistry: {
+      find: (provider: string, id: string) => availableModels.find((model) => model.provider === provider && model.id === id),
+    },
+    ui: { notify: (message: string, level: string) => notifications.push({ message, level }) },
+    reload: async () => { reloads += 1; },
+  };
 
   await command.handler("status", ctx);
   assert.match(notifications.at(-1)?.message ?? "", new RegExp(`Active SDD/ODD profile: ${manifest.defaultProfile}`));
   await command.handler("local", ctx);
   assert.equal(reloads, 1);
+  assert.deepEqual(sessionModel, { provider: localProvider, id: localId });
+  assert.deepEqual(modelChanges, [localOrchestrator.model]);
+  assert.equal(thinkingLevel, localOrchestrator.thinking);
   assert.match(notifications.at(-1)?.message ?? "", /local profile activated/);
   assert.deepEqual((await readJson(join(piHome, "gentle-ai", "models.json")))["sdd-research"], { model: "local/sdd-research", thinking: "medium" });
   assert.deepEqual((await readJson(join(piHome, "agent", "subagents.json"))).model_profiles["sdd-research"], { model: "local/sdd-research", effort: "medium" });

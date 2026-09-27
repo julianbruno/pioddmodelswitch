@@ -31,7 +31,7 @@ PI_HOME=/path/to/pi-home pi
 - [Installation and recovery](HOW_TO_INSTALL.md)
 - [Programmatic testing](TESTING.md)
 - [Command usage](USAGE.md)
-- [How switching works](MODEL_SWITCHING.md)
+- [How switching works](MODEL_SWITCHING.md) — direct selection also aligns the current Pi session's orchestrator model and thinking (1.4.0).
 - [Architecture and limitations](ARCHITECTURE.md)
 - [Provenance caveat](NOTICE.md)
 

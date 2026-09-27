@@ -33,7 +33,7 @@ Paths are relative to `PI_HOME`, which defaults to `~/.pi`. The extension also i
 | `/jb-sdd-odd-models undo` | Yes, if safe | Yes, after undo | Revert the last completed transaction when no intervening edits exist. |
 | `/jb-sdd-odd-models recover` | Sometimes | Yes, after changed recovery | Finish, record, or clear an interrupted transaction from recorded safe states. |
 
-A switch that is already semantically aligned leaves bytes and mtimes untouched and does not call reload, even if the files use different JSON formatting.
+A switch that is already semantically aligned leaves bytes and mtimes untouched and does not call reload, even if the files use different JSON formatting. Direct selection still aligns the current Pi session to the effective selected `orchestrator` model and thinking; when both files and session already match, it makes no model call or reload.
 
 ## Opposite-provider judges
 
@@ -57,7 +57,7 @@ Profile acceptance is separate from capability diagnostics. `doctor` uses the in
 - all other levels, including `xhigh`, `max`, and model-specific values, require an own `thinkingLevelMap[level]` entry that is neither null nor undefined; and
 - when the registry is unavailable, catalog, auth, and effort checks are skipped rather than assumed successful.
 
-These are local capability checks, not provider requests or execution guarantees. A successful profile switch preserves the requested effort even if `doctor` warns about it; the installed runtime or provider may still reject unsupported levels.
+These are local capability checks, not provider requests or execution guarantees. Profile storage and read-only diagnostics preserve arbitrary effort strings. Direct selection requires a standard Pi thinking level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) for the effective `orchestrator` entry, a model in the current session registry, and successful model authentication and exact thinking readback. Other managed agents retain their requested effort even if `doctor` warns about it; the installed runtime or provider may still reject unsupported levels.
 
 ## Files read and written
 
@@ -109,7 +109,7 @@ Safety limits:
 
 After a successful switch, undo, or changed recovery, the extension calls Pi's reload API exactly once and treats a successful reload as terminal for the handler.
 
-If reload fails, the write is not rolled back: the selected files remain installed. The UI asks the operator to run `/reload` manually or restart Pi.
+If reload fails, the write is not rolled back: the selected files and aligned session remain active. The UI asks the operator to run `/reload` manually or restart Pi. If the file switch fails after session alignment, the command attempts to restore the original session model and thinking and explicitly reports restoration failures; file transaction safety remains independent.
 
 ## Active, custom, and unknown detection
 

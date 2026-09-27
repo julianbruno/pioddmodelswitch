@@ -18,9 +18,11 @@ type FakeCommandContext = {
   cwd: string;
   ui: { notify(message: string, level: string): void };
   reload(): Promise<void>;
+  model?: { provider: string; id: string };
+  modelRegistry: { find(provider: string, id: string): unknown };
 };
 
-const normalAgents = ["sdd-init", "sdd-explore", "sdd-research", "gentle-ai-worker"];
+const normalAgents = ["orchestrator", "sdd-init", "sdd-explore", "sdd-research", "gentle-ai-worker"];
 const judgeAgents = ["review-risk", "review-resilience", "review-readability", "review-reliability", "jd-judge-a", "jd-judge-b"];
 const agents = [...normalAgents, ...judgeAgents];
 
@@ -79,7 +81,7 @@ async function createHarness() {
   const manifest = {
     schemaVersion: 1,
     defaultProfile: "openai",
-    managedAgentGroups: { sdd: ["sdd-init", "sdd-explore", "sdd-research"], odd: ["gentle-ai-worker"] },
+    managedAgentGroups: { sdd: ["orchestrator", "sdd-init", "sdd-explore", "sdd-research"], odd: ["gentle-ai-worker"] },
     reservedCommandNames: ["status", "list", "preview", "doctor", "undo", "recover"],
     oppositeProviderJudges: {
       enabled: true,
@@ -107,7 +109,17 @@ async function createHarness() {
   });
 
   const commands = new Map<string, RegisteredCommand>();
-  sddModelProfiles({ registerCommand: (name: string, command: RegisteredCommand) => commands.set(name, command) } as any, { piHome });
+  let current = { provider: "openai-codex", id: "orchestrator" };
+  let thinking = "high";
+  const modelCalls: string[] = [];
+  const thinkingCalls: string[] = [];
+  const pi = {
+    registerCommand: (name: string, command: RegisteredCommand) => commands.set(name, command),
+    setModel: async (model: { provider: string; id: string }) => { modelCalls.push(`${model.provider}/${model.id}`); current = model; thinking = "low"; return true; },
+    getThinkingLevel: () => thinking,
+    setThinkingLevel: (level: string) => { thinkingCalls.push(level); thinking = level; },
+  };
+  sddModelProfiles(pi as any, { piHome });
   const command = commands.get("jb-sdd-odd-models");
   assert.ok(command);
 
@@ -115,6 +127,8 @@ async function createHarness() {
   let reloadCount = 0;
   const ctx: FakeCommandContext = {
     cwd: root,
+    get model() { return current; },
+    modelRegistry: { find: (provider, id) => ({ provider, id }) },
     ui: { notify: (message, level) => notifications.push({ message, level }) },
     reload: async () => { reloadCount += 1; },
   };
@@ -129,8 +143,132 @@ async function createHarness() {
     ctx,
     notifications,
     reloadCount: () => reloadCount,
+    modelCalls,
+    thinkingCalls,
+    session: () => ({ model: current, thinking }),
+    pi,
   };
 }
+
+test("direct selection aligns the session, including file no-op and complete no-op", async () => {
+  const h = await createHarness();
+  await h.command.handler("local", h.ctx);
+  assert.deepEqual(h.session(), { model: { provider: "local", id: "orchestrator" }, thinking: "medium" });
+  assert.deepEqual(h.modelCalls, ["local/orchestrator"]);
+  const before = await snapshotTree(h.root);
+  await h.command.handler("local", h.ctx);
+  assert.deepEqual(await snapshotTree(h.root), before);
+  assert.equal(h.modelCalls.length, 1);
+  assert.deepEqual(h.thinkingCalls, ["medium"]);
+  assert.equal(h.reloadCount(), 1);
+  await h.pi.setModel({ provider: "openai-codex", id: "orchestrator" });
+  h.pi.setThinkingLevel("high");
+  const calls = h.modelCalls.length;
+  await h.command.handler("local", h.ctx);
+  assert.deepEqual(h.session(), { model: { provider: "local", id: "orchestrator" }, thinking: "medium" });
+  assert.equal(h.modelCalls.length, calls + 1);
+  assert.deepEqual(await snapshotTree(h.root), before);
+  assert.equal(h.reloadCount(), 1);
+});
+
+test("session preflight and alignment failures leave files, mtimes, and reload unchanged", async () => {
+  for (const failure of ["no-current", "missing-model", "no-auth", "throw", "clamp"]) {
+    const h = await createHarness();
+    const before = await snapshotTree(h.root);
+    if (failure === "no-current") Object.defineProperty(h.ctx, "model", { value: undefined });
+    if (failure === "missing-model") h.ctx.modelRegistry.find = () => undefined;
+    if (failure === "no-auth") h.pi.setModel = async (model: { provider: string; id: string }) => { h.modelCalls.push(`${model.provider}/${model.id}`); return false; };
+    if (failure === "throw") h.pi.setModel = async (model: { provider: string; id: string }) => { h.modelCalls.push(`${model.provider}/${model.id}`); throw new Error("model failure"); };
+    if (failure === "clamp") {
+      const setThinking = h.pi.setThinkingLevel;
+      h.pi.setThinkingLevel = (level: string) => { if (level === "medium") { h.thinkingCalls.push(level); return; } setThinking(level); };
+    }
+    await h.command.handler("local", h.ctx);
+    assert.equal(h.notifications.at(-1)?.level, "error", failure);
+    assert.deepEqual(await snapshotTree(h.root), before, failure);
+    assert.equal(h.reloadCount(), 0, failure);
+    if (failure === "no-auth" || failure === "throw") {
+      assert.deepEqual(h.session(), { model: { provider: "openai-codex", id: "orchestrator" }, thinking: "high" });
+      assert.deepEqual(h.thinkingCalls, []);
+      assert.deepEqual(h.modelCalls, ["local/orchestrator"]);
+    }
+    if (failure === "clamp") {
+      assert.deepEqual(h.modelCalls, ["local/orchestrator", "openai-codex/orchestrator"]);
+      assert.deepEqual(h.session(), { model: { provider: "openai-codex", id: "orchestrator" }, thinking: "high" });
+    }
+  }
+});
+
+test("reload failure keeps switched files and aligned session without compensation", async () => {
+  const h = await createHarness();
+  let reloads = 0;
+  h.ctx.reload = async () => { reloads++; throw new Error("reload unavailable"); };
+  await h.command.handler("local", h.ctx);
+  assert.equal(reloads, 1);
+  assert.deepEqual(h.session(), { model: { provider: "local", id: "orchestrator" }, thinking: "medium" });
+  assert.deepEqual(h.modelCalls, ["local/orchestrator"]);
+  assert.deepEqual(h.thinkingCalls, ["medium"]);
+  assert.deepEqual((await readJson(h.canonicalPath)).orchestrator, { model: "local/orchestrator", thinking: "medium" });
+  assert.deepEqual((await readJson(h.runtimePath)).model_profiles.orchestrator, { model: "local/orchestrator", effort: "medium" });
+  assert.equal(h.notifications.at(-1)?.level, "error");
+  assert.match(h.notifications.at(-1)?.message ?? "", /reload unavailable.*files and current session remain active.*\/reload manually or restart Pi/s);
+});
+
+test("model change reapplies thinking even when target equals previous thinking", async () => {
+  const h = await createHarness();
+  const local = profile("local", "medium");
+  local.orchestrator.thinking = "high";
+  await writeJson(join(h.gentleDir, "models.local.json"), local);
+  await h.command.handler("local", h.ctx);
+  assert.equal(h.session().thinking, "high");
+  assert.deepEqual(h.thinkingCalls, ["high"]);
+});
+
+test("nonstandard orchestrator thinking aborts before any model call or file mutation", async () => {
+  const h = await createHarness();
+  const local = profile("local", "medium");
+  local.orchestrator.thinking = "Provider.Custom-v2";
+  await writeJson(join(h.gentleDir, "models.local.json"), local);
+  const before = await snapshotTree(h.root);
+  await h.command.handler("local", h.ctx);
+  assert.match(h.notifications.at(-1)?.message ?? "", /not a standard Pi thinking level/);
+  assert.deepEqual(h.modelCalls, []);
+  assert.deepEqual(h.thinkingCalls, []);
+  assert.deepEqual(await snapshotTree(h.root), before);
+  assert.equal(h.reloadCount(), 0);
+});
+
+test("max is an applicable standard Pi thinking level", async () => {
+  const h = await createHarness();
+  const local = profile("local", "medium");
+  local.orchestrator.thinking = "max";
+  await writeJson(join(h.gentleDir, "models.local.json"), local);
+  await h.command.handler("local", h.ctx);
+  assert.deepEqual(h.session(), { model: { provider: "local", id: "orchestrator" }, thinking: "max" });
+  assert.equal(h.reloadCount(), 1);
+});
+
+test("file switch failure restores session and reports failed restoration", async () => {
+  for (const failedRestore of [false, true]) {
+    const h = await createHarness();
+    const before = await snapshotTree(h.root);
+    const setModel = h.pi.setModel;
+    if (failedRestore) h.pi.setModel = async (model: { provider: string; id: string }) => model.provider === "openai-codex" ? false : setModel(model);
+    // Existing transaction hazard makes switchProfile fail after session alignment.
+    await mkdir(h.journalDir, { recursive: true });
+    await writeFile(join(h.journalDir, "lock.json"), "invalid lock");
+    await h.command.handler("local", h.ctx);
+    assert.equal(h.reloadCount(), 0);
+    assert.match(h.notifications.at(-1)?.message ?? "", failedRestore ? /session restoration failed/ : /original session restored/);
+    if (!failedRestore) assert.deepEqual(h.session(), { model: { provider: "openai-codex", id: "orchestrator" }, thinking: "high" });
+    assert.deepEqual(h.thinkingCalls, ["medium", "high"]);
+    assert.match(h.notifications.at(-1)?.message ?? "", /lock/);
+    assert.equal(await readFile(h.canonicalPath, "utf8"), before.find((item) => item.path === "gentle-ai/models.json")?.content);
+    assert.equal(await readFile(h.runtimePath, "utf8"), before.find((item) => item.path === "agent/subagents.json")?.content);
+    assert.equal((await stat(h.canonicalPath)).mtimeMs, before.find((item) => item.path === "gentle-ai/models.json")?.mtimeMs);
+    assert.equal((await stat(h.runtimePath)).mtimeMs, before.find((item) => item.path === "agent/subagents.json")?.mtimeMs);
+  }
+});
 
 test("registered command uses manifest profiles for completion, list, preview, and direct switching", async () => {
   const harness = await createHarness();
@@ -166,7 +304,7 @@ test("registered command uses manifest profiles for completion, list, preview, a
 });
 
 test("preview, switch, and active state preserve unrestricted effort strings exactly", async () => {
-  for (const effort of ["max", "Provider.Custom-v2", "custom effort"]) {
+  for (const effort of ["Provider.Custom-v2", "custom effort"]) {
     const harness = await createHarness();
     await writeJson(join(harness.gentleDir, "models.local.json"), profile("local", effort));
     const beforePreview = await snapshotTree(harness.root);
@@ -179,28 +317,12 @@ test("preview, switch, and active state preserve unrestricted effort strings exa
     assert.equal(harness.reloadCount(), 0);
 
     await harness.command.handler("local", harness.ctx);
-    assert.equal(harness.reloadCount(), 1);
-    const canonical = await readJson(harness.canonicalPath);
-    const runtime = await readJson(harness.runtimePath);
-    for (const agent of agents) {
-      assert.deepEqual(canonical[agent], { model: `local/${agent}`, thinking: effort });
-      assert.deepEqual(runtime.model_profiles[agent], { model: `local/${agent}`, effort });
-    }
-
-    const afterSwitch = await snapshotTree(harness.root);
+    assert.equal(harness.reloadCount(), 0);
+    assert.match(harness.notifications.at(-1)?.message ?? "", /standard Pi thinking level/);
+    assert.deepEqual(await snapshotTree(harness.root), beforePreview);
     await harness.command.handler("status", harness.ctx);
-    assert.match(harness.notifications.at(-1)?.message ?? "", /Active SDD\/ODD profile: local/);
-    assert.ok(harness.notifications.at(-1)?.message.includes(`sdd-init: local/sdd-init (${effort})`));
-    await harness.command.handler("preview openai", harness.ctx);
-    assert.ok(harness.notifications.at(-1)?.message.includes(`canonical local/sdd-init (${effort}) ->`));
-    assert.ok(harness.notifications.at(-1)?.message.includes(`runtime local/sdd-init (${effort}) ->`));
-    await harness.command.handler("local", harness.ctx);
-    assert.match(harness.notifications.at(-1)?.message ?? "", /already active/i);
-    assert.equal(harness.reloadCount(), 1);
-    assert.deepEqual(await snapshotTree(harness.root), afterSwitch);
-
-    await harness.command.handler("openai", harness.ctx);
-    assert.equal(harness.reloadCount(), 2);
+    await harness.command.handler("doctor", harness.ctx);
+    assert.deepEqual(await snapshotTree(harness.root), beforePreview);
   }
 });
 

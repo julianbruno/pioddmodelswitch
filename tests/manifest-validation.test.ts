@@ -151,8 +151,8 @@ function validProfilePatch(patch: Record<string, unknown>): Record<string, unkno
   };
 }
 
-test("package version is 1.3.1", async () => {
-  assert.equal((await readJson("package.json")).version, "1.3.1");
+test("package version is 1.4.0", async () => {
+  assert.equal((await readJson("package.json")).version, "1.4.0");
 });
 
 test("claude-opus-5.5 has exact task-aware effort categories and one model", async () => {

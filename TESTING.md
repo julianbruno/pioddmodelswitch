@@ -29,7 +29,7 @@ Expected current result:
 |---|---|
 | `tests/manifest-validation.test.ts` | Validates manifest schema, package version, managed agent coverage, generated profile files, named-profile role expansion, opposite-provider judge pairing, and runtime derivation. |
 | `tests/installer-merge.test.ts` | Verifies installation into temporary `PI_HOME` fixtures, dynamic copying of every registered profile, default active profile derivation, backup behavior, idempotency, and Node version gating. |
-| `tests/command-behavior.test.ts` | Exercises the `/jb-sdd-odd-models` command seam with a fake Pi command context: completions, list, preview, switch, no-op behavior, undo, recover, and transaction safety. |
+| `tests/command-behavior.test.ts` | Exercises the `/jb-sdd-odd-models` command seam with a fake Pi command context: completions, list, preview, session model/thinking alignment, no-op behavior, preflight failures, restoration, undo, recover, and transaction safety. |
 | `tests/doctor.test.ts` | Verifies read-only diagnostics for healthy state, drift, malformed journals, missing entries, catalog evidence, auth evidence, and effort compatibility. |
 | `tests/transaction-recovery.test.ts` | Tests the transaction layer directly: locks, rollback, interrupted writes, recovery, undo, and external-change guards. |
 
