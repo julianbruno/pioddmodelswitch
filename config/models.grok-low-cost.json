@@ -59,6 +59,10 @@
     "model": "xai/grok-4.3",
     "thinking": "medium"
   },
+  "jd-fix-agent": {
+    "model": "xai/grok-4.3",
+    "thinking": "medium"
+  },
   "gentle-ai-verify": {
     "model": "xai/grok-4.6",
     "thinking": "medium"

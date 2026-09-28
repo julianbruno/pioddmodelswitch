@@ -37,7 +37,7 @@ const expectedSddAgents = [
   "sdd-status",
   "sdd-sync",
 ];
-const expectedOddAgents = ["gentle-ai-explore", "gentle-ai-worker", "gentle-ai-verify", "orchestrator"];
+const expectedOddAgents = ["gentle-ai-explore", "gentle-ai-worker", "gentle-ai-verify", "orchestrator", "jd-fix-agent"];
 const expectedJudgeAgents = [
   "review-risk",
   "review-resilience",
@@ -62,7 +62,7 @@ const roleExpansion: Record<string, string[]> = {
     "gentle-ai-verify",
     ...expectedJudgeAgents,
   ],
-  codigo: ["sdd-apply", "gentle-ai-worker"],
+  codigo: ["sdd-apply", "gentle-ai-worker", "jd-fix-agent"],
   liviano: ["sdd-init", "sdd-spec", "sdd-tasks", "sdd-onboard", "sdd-archive", "sdd-status", "sdd-sync"],
 };
 const expectedOppositePairs: Record<string, string> = {
@@ -160,7 +160,7 @@ test("claude-opus-5.5 has exact task-aware effort categories and one model", asy
   const profile = (await packagedProfiles(manifest))["claude-opus-5.5"];
   const categories: Record<string, string[]> = {
     low: ["sdd-init", "sdd-onboard", "sdd-archive", "sdd-status", "sdd-sync"],
-    medium: ["sdd-explore", "sdd-spec", "sdd-tasks", "sdd-apply", "gentle-ai-explore", "gentle-ai-worker", "orchestrator", "review-readability"],
+    medium: ["sdd-explore", "sdd-spec", "sdd-tasks", "sdd-apply", "gentle-ai-explore", "gentle-ai-worker", "jd-fix-agent", "orchestrator", "review-readability"],
     high: ["sdd-research", "sdd-proposal", "sdd-design", "sdd-verify", "gentle-ai-verify", "review-risk", "review-resilience", "review-reliability", "review-refuter", "review-validator", "jd-judge-a", "jd-judge-b"],
   };
   assert.deepEqual(Object.keys(profile).sort(), managedAgents(manifest).sort());
@@ -175,7 +175,7 @@ test("packaged manifest defaults to openaigentle and registers named profiles pl
   const manifest = await packagedManifest();
   const catalog = await packagedNamedProfiles();
   const namedProfileNames = catalog.profiles.map((profile) => profile.name);
-  const expectedRegisteredNames = ["openai", "openaigentle", "grok", ...namedProfileNames, "claude-opus-5.5"];
+  const expectedRegisteredNames = ["openai", "openaigentle", "grok", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep"];
   assert.ok(namedProfileNames.includes("gpt-5.5-powerful"));
 
   assert.equal(manifest.schemaVersion, 1);
@@ -271,7 +271,7 @@ test("openaigentle preserves the supplied GPT-6 mapping in canonical and runtime
     ...["sdd-explore", "sdd-spec", "sdd-tasks", "gentle-ai-explore"].map((agent) =>
       [agent, { model: "openai-codex/gpt-6-luna", thinking: "high" }]),
     ["sdd-archive", { model: "openai-codex/gpt-6-luna", thinking: "max" }],
-    ...["sdd-apply", "gentle-ai-worker"].map((agent) =>
+    ...["sdd-apply", "gentle-ai-worker", "jd-fix-agent"].map((agent) =>
       [agent, { model: "openai-codex/gpt-6-sol", thinking: "low" }]),
     ...["sdd-research", "sdd-proposal", "sdd-design", "sdd-verify", "gentle-ai-verify", ...expectedJudgeAgents].map((agent) =>
       [agent, { model: "openai-codex/gpt-6-sol", thinking: "high" }]),
@@ -282,6 +282,27 @@ test("openaigentle preserves the supplied GPT-6 mapping in canonical and runtime
   assert.deepEqual(deriveRuntimeModelProfilesForSelection(manifest.defaultProfile, profiles, manifest),
     Object.fromEntries(Object.entries(expected).map(([agent, entry]) =>
       [agent, { model: entry.model, effort: entry.thinking }])));
+});
+
+test("separate provider profiles inherit their baselines, override implementation routes, and stay unpaired", async () => {
+  const manifest = await packagedManifest();
+  const profiles = await packagedProfiles(manifest);
+  const routes = [
+    { name: "claude-sep", baseline: "claude-opus-5.5", overrides: ["sdd-explore", "gentle-ai-explore", "sdd-apply", "gentle-ai-worker", "jd-fix-agent"], entry: { model: "claude-bridge/claude-sonnet-5", thinking: "high" }, explicit: { "review-readability": { model: "claude-bridge/claude-opus-5-5", thinking: "high" } } },
+    { name: "openai-sep", baseline: "openaigentle", overrides: ["sdd-apply", "gentle-ai-worker", "jd-fix-agent"], entry: { model: "openai-codex/gpt-6-sol", thinking: "medium" } },
+  ];
+  for (const { name, baseline, overrides, entry, explicit = {} } of routes) {
+    const expected = { ...profiles[baseline], ...Object.fromEntries(overrides.map((agent) => [agent, entry])), ...explicit };
+    assert.deepEqual(Object.keys(profiles[name]).sort(), expectedAgents.slice().sort());
+    assert.deepEqual(profiles[name], expected);
+    assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, name), false);
+    assert.deepEqual(deriveCanonicalProfileForSelection(name, profiles, manifest), expected);
+    assert.deepEqual(deriveRuntimeModelProfilesForSelection(name, profiles, manifest),
+      Object.fromEntries(Object.entries(expected).map(([agent, value]) => [agent, { model: value.model, effort: value.thinking }])));
+  }
+  for (const profile of Object.values(profiles)) {
+    assert.deepEqual(profile["jd-fix-agent"], profile["gentle-ai-worker"]);
+  }
 });
 
 test("claude-opus-5.5 is standalone, unpaired, and preserves its calibrated effort at runtime", async () => {

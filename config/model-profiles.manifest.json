@@ -21,7 +21,8 @@
       "gentle-ai-explore",
       "gentle-ai-worker",
       "gentle-ai-verify",
-      "orchestrator"
+      "orchestrator",
+      "jd-fix-agent"
     ]
   },
   "reservedCommandNames": [
@@ -129,6 +130,14 @@
     {
       "name": "claude-opus-5.5",
       "modelsFile": "models.claude-opus-5.5.json"
+    },
+    {
+      "name": "claude-sep",
+      "modelsFile": "models.claude-sep.json"
+    },
+    {
+      "name": "openai-sep",
+      "modelsFile": "models.openai-sep.json"
     }
   ]
 }

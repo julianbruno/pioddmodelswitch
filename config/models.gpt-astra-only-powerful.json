@@ -59,6 +59,10 @@
     "model": "openai-codex/gpt-6-astra",
     "thinking": "medium"
   },
+  "jd-fix-agent": {
+    "model": "openai-codex/gpt-6-astra",
+    "thinking": "medium"
+  },
   "gentle-ai-verify": {
     "model": "openai-codex/gpt-6-astra",
     "thinking": "high"
