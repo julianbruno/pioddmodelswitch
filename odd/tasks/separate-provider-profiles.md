@@ -57,6 +57,8 @@ Add two selectable profiles named `claude-sep` and `openai-sep`, based on the su
 - Added `jd-fix-agent` to the manifest and every registered profile, registered both unpaired standalone profiles, and documented their inherited and overridden routes in README.md and MODEL_SWITCHING.md. No commit was made, as requested.
 - Visual correction: `claude-sep` `review-readability` explicitly overrides the baseline to Opus/high. Test-first focused run failed 1/14 on the old medium route; after the profile correction, focused verification passed 14/14, `npm test` passed 66/66, and `git diff --check` was clean. No commit was made.
 - Independent verification found stale inheritance wording; corrected README.md and MODEL_SWITCHING.md to state the `claude-sep` `review-readability` Opus/high override alongside the five Sonnet/high routes. Documentation correction verification: `npm test` passed 66/66 and `git diff --check` was clean.
+- Work-unit commit: `84eb628` (`feat(profiles): add separate Claude and OpenAI routes`).
+- Global installation completed in `/home/julian/.pi`; installer backup: `/home/julian/.pi/backups/jb-sdd-odd-models-2026-09-28T19-15-02-420Z-909034`.
 
 ## Next step
-Parent review of the uncommitted changes and any user-directed delivery decision.
+Restart Pi, then select `/jb-sdd-odd-models claude-sep` or `/jb-sdd-odd-models openai-sep` and run `/jb-sdd-odd-models doctor`.
