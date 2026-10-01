@@ -72,6 +72,10 @@
       "modelsFile": "models.openaigentle.json"
     },
     {
+      "name": "openai6-1-gentle",
+      "modelsFile": "models.openai6-1-gentle.json"
+    },
+    {
       "name": "grok",
       "modelsFile": "models.grok.json"
     },

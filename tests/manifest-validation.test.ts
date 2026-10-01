@@ -175,7 +175,7 @@ test("packaged manifest defaults to openaigentle and registers named profiles pl
   const manifest = await packagedManifest();
   const catalog = await packagedNamedProfiles();
   const namedProfileNames = catalog.profiles.map((profile) => profile.name);
-  const expectedRegisteredNames = ["openai", "openaigentle", "grok", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep"];
+  const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep"];
   assert.ok(namedProfileNames.includes("gpt-5.5-powerful"));
 
   assert.equal(manifest.schemaVersion, 1);
@@ -280,6 +280,25 @@ test("openaigentle preserves the supplied GPT-6 mapping in canonical and runtime
   assert.deepEqual(profiles.openaigentle, expected);
   assert.deepEqual(deriveCanonicalProfileForSelection(manifest.defaultProfile, profiles, manifest), expected);
   assert.deepEqual(deriveRuntimeModelProfilesForSelection(manifest.defaultProfile, profiles, manifest),
+    Object.fromEntries(Object.entries(expected).map(([agent, entry]) =>
+      [agent, { model: entry.model, effort: entry.thinking }])));
+});
+
+test("openai6-1-gentle maps every GPT-6 role to GPT-6.1 and selects without judge pairing", async () => {
+  const manifest = await packagedManifest();
+  const profiles = await packagedProfiles(manifest);
+  const name = "openai6-1-gentle";
+  const expected = Object.fromEntries(Object.entries(profiles.openaigentle).map(([agent, entry]) => [
+    agent, { model: entry.model.replace(/gpt-6(?=-)/g, "gpt-6-1"), thinking: entry.thinking },
+  ]));
+
+  assert.equal(manifest.defaultProfile, "openaigentle");
+  assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, name), false);
+  assert.deepEqual(Object.keys(profiles[name]), Object.keys(profiles.openaigentle));
+  assert.ok(Object.values(profiles[name]).every(({ model }) => /^openai-codex\/gpt-6-1-(sol|luna)$/.test(model)));
+  assert.deepEqual(profiles[name], expected);
+  assert.deepEqual(deriveCanonicalProfileForSelection(name, profiles, manifest), expected);
+  assert.deepEqual(deriveRuntimeModelProfilesForSelection(name, profiles, manifest),
     Object.fromEntries(Object.entries(expected).map(([agent, entry]) =>
       [agent, { model: entry.model, effort: entry.thinking }])));
 });
