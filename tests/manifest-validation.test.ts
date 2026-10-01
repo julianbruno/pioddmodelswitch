@@ -284,18 +284,20 @@ test("openaigentle preserves the supplied GPT-6 mapping in canonical and runtime
       [agent, { model: entry.model, effort: entry.thinking }])));
 });
 
-test("openai6-1-gentle maps every GPT-6 role to GPT-6.1 and selects without judge pairing", async () => {
+test("openai6-1-gentle changes only Sol to the registered dotted ID and preserves Luna", async () => {
   const manifest = await packagedManifest();
   const profiles = await packagedProfiles(manifest);
   const name = "openai6-1-gentle";
   const expected = Object.fromEntries(Object.entries(profiles.openaigentle).map(([agent, entry]) => [
-    agent, { model: entry.model.replace(/gpt-6(?=-)/g, "gpt-6-1"), thinking: entry.thinking },
+    agent, { model: entry.model === "openai-codex/gpt-6-sol" ? "openai-codex/gpt-6.1-sol" : entry.model, thinking: entry.thinking },
   ]));
 
   assert.equal(manifest.defaultProfile, "openaigentle");
   assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, name), false);
   assert.deepEqual(Object.keys(profiles[name]), Object.keys(profiles.openaigentle));
-  assert.ok(Object.values(profiles[name]).every(({ model }) => /^openai-codex\/gpt-6-1-(sol|luna)$/.test(model)));
+  assert.ok(Object.values(profiles[name]).some(({ model }) => model === "openai-codex/gpt-6.1-sol"));
+  assert.ok(Object.values(profiles[name]).some(({ model }) => model === "openai-codex/gpt-6-luna"));
+  assert.ok(Object.values(profiles[name]).every(({ model }) => ["openai-codex/gpt-6.1-sol", "openai-codex/gpt-6-luna"].includes(model)));
   assert.deepEqual(profiles[name], expected);
   assert.deepEqual(deriveCanonicalProfileForSelection(name, profiles, manifest), expected);
   assert.deepEqual(deriveRuntimeModelProfilesForSelection(name, profiles, manifest),

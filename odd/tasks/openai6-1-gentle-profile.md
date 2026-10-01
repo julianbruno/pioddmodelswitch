@@ -1,25 +1,22 @@
 # openai6-1-gentle profile
 
-Objective: Add an installable `openai6-1-gentle` standalone profile cloned from `openaigentle`, replacing `gpt-6` model identifiers with `gpt-6-1`, without changing the default or unrelated profiles.
+Objective: Provide a selectable copy of `openaigentle` that changes only `openai-codex/gpt-6-sol` to the locally registered `openai-codex/gpt-6.1-sol`; preserve all `gpt-6-luna` assignments and thinking levels.
 
-Why: The user wants to select the corresponding GPT-6.1 mapping while retaining the current role/effort layout.
+Why: The initial implementation incorrectly renamed both Sol and Luna to hyphenated GPT-6.1 IDs, causing Pi registry failures. The user clarified Sol-only replacement and chose the existing dotted Sol ID.
 
-Scope: Register the profile, cover mapping and selection in tests, document its availability, install into the local Pi home, and commit the complete work unit. Provider availability of `gpt-6-1-sol`/`gpt-6-1-luna` is outside repository validation. Do not change package version, default profile, or judge pairing.
-
-TDD: No explicit project/session TDD setting was found; mode unknown, so use ordinary focused and full functional checks (runner: `node --experimental-strip-types --test tests/*.test.ts`).
-
-Delivery: `ask-on-risk`; forecast under 400 authored changed lines; two work-unit commits on `feat/openai6-1-gentle-profile` (profile behavior and installation record). RDD is off.
+Scope: Correct the standalone profile, tests, and README; reinstall into local Pi; preserve manifest default, agent roles, and judge pairing. Do not edit the local model registry. TDD mode remains unknown (not enabled); runner: `node --experimental-strip-types --test tests/*.test.ts`. RDD is off. Delivery: `ask-on-risk`, under 400 changed lines.
 
 ## Tasks
 
-- [x] P1: Add the standalone profile, manifest registration, regression test, and concise profile documentation. Route: delegated writer (multiple non-trivial files). Check: focused manifest tests 15/15; independent full suite 67/67, shell syntax and diff check passed; exact 26-agent mapping checked. Commit: `67f051e` (`feat(profiles): add openai6-1-gentle mapping`).
-- [x] P2: Install locally and verify installed profile presence. Route: bounded install, independent delegated verifier. Check: `./install/install.sh` succeeded, both installed profile and manifest are byte-identical to repository sources (`cmp`); `git diff --check` passed. Pi slash-command `list` was unavailable in the shell, so interactive visibility remains pending. Commit: documentation work unit `docs(odd): record openai6-1-gentle installation` (the commit introducing this document).
+- [x] P1: Initial profile registration, tests and documentation. Commit: `67f051e` (superseded by C1).
+- [x] P2: Initial local installation and evidence. Commit: `7761fd1` (superseded by C1).
+- [x] C1: Replace only Sol IDs with registered `gpt-6.1-sol`, restore Luna assignments, update regression test and README, reinstall, verify, and commit. Route: delegated writer for multi-file correction; bounded install and independent verification. Checks: focused tests 15/15 and full tests 67/67; exact 21 Sol/5 Luna mapping comparison; installed profile and manifest byte-identical; `git diff --check` passed; local offline Pi registry lists both IDs. Commit: `fix(profiles): use registered Sol model and retain Luna` (the commit introducing this correction).
 
 ## Progress
 
-- Exploration: manifest drives installer discovery; `openaigentle` is the current default and the new profile must remain unpaired. Local Pi agent directory exists.
-- Current: P1 and P2 complete. Native assessment was unassessable due to untracked files; independent verifier passed. Installer backed up changed targets under `/home/julian/.pi/backups/jb-sdd-odd-models-2026-10-01T02-01-27-744Z-2700878`. Installed default remains `openaigentle`; no profile switch requested.
+- Prior diagnosis: local Pi registry contains `gpt-6.1-sol`, but no `gpt-6.1-luna`; the previous profile had 21 incorrect Sol and five incorrect Luna entries. User chose registered Sol ID and the Sol-only copy semantics.
+- Current: C1 verified. Assessment unassessable (`schema-incompatible`); independent verifier passed. Reinstalled into `/home/julian/.pi`; backup `/home/julian/.pi/backups/jb-sdd-odd-models-2026-10-01T02-17-29-187Z-2722274`. Runtime model invocation not verified.
 
 ## Next step
 
-Restart Pi, inspect `/jb-sdd-odd-models list`, and select `/jb-sdd-odd-models openai6-1-gentle` if the provider supports both model IDs.
+Restart Pi, select `/jb-sdd-odd-models openai6-1-gentle`, and confirm a live model request; neither authentication nor runtime execution was tested.
