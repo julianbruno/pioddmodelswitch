@@ -59,6 +59,15 @@ const expectedOppositePairs: Record<string, string> = {
   grok: "openai",
 };
 
+const luna = "openai/gpt-6-luna";
+const sol = "openai/gpt-6.1-sol";
+// Standalone GPT-6.1 lanes: Powerful substitutes Sol 6.1 for the unavailable Astra 6.1.
+const gpt61Profiles = [
+  { name: "gpt-6-1-lowcost", orchestrator: [luna, "medium"], reasoning: [sol, "medium"], code: [luna, "medium"], light: [luna, "medium"] },
+  { name: "gpt-6-1-recommended", orchestrator: [sol, "medium"], reasoning: [sol, "medium"], code: [luna, "high"], light: [luna, "medium"] },
+  { name: "gpt-6-1-powerful", orchestrator: [sol, "medium"], reasoning: [sol, "xhigh"], code: [sol, "high"], light: [luna, "high"] },
+] as const;
+
 type NamedProfilesCatalog = {
   schemaVersion: 1;
   roles: string[];
@@ -150,7 +159,7 @@ test("packaged manifest defaults to openaigentle and registers named profiles pl
   const manifest = await packagedManifest();
   const catalog = await packagedNamedProfiles();
   const namedProfileNames = catalog.profiles.map((profile) => profile.name);
-  const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep"];
+  const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep", ...gpt61Profiles.map(({ name }) => name)];
   assert.ok(namedProfileNames.includes("gpt-5.5-powerful"));
 
   assert.equal(manifest.schemaVersion, 2);
@@ -273,6 +282,32 @@ test("openai6-1-gentle uses registered OpenAI Sol and Luna routes and preserves 
   assert.deepEqual(deriveRuntimeModelProfilesForSelection(name, profiles, manifest),
     Object.fromEntries(Object.entries(expected).map(([agent, entry]) =>
       [agent, { model: entry.model, effort: entry.thinking }])));
+});
+
+test("gpt-6-1 lanes are standalone, unpaired, and route every ODD role explicitly", async () => {
+  const manifest = await packagedManifest();
+  const profiles = await packagedProfiles(manifest);
+  const catalog = await packagedNamedProfiles();
+  assert.equal(manifest.defaultProfile, "openaigentle");
+  for (const lane of gpt61Profiles) {
+    const entry = ([model, thinking]: readonly [string, string]) => ({ model, thinking });
+    const expected = Object.fromEntries([
+      ["orchestrator", entry(lane.orchestrator)],
+      ["gentle-ai-explore", entry(lane.light)],
+      ...["gentle-ai-worker", "jd-fix-agent"].map((agent) => [agent, entry(lane.code)]),
+      ...["gentle-ai-verify", ...expectedJudgeAgents].map((agent) => [agent, entry(lane.reasoning)]),
+    ]);
+    const file = await readJson(join("config", `models.${lane.name}.json`));
+    assert.deepEqual(Object.keys(file).sort(), expectedAgents.slice().sort());
+    assert.ok(Object.keys(file).every((agent) => !agent.startsWith("sdd-")));
+    assert.deepEqual(profiles[lane.name], expected);
+    assert.deepEqual(profiles[lane.name]["jd-fix-agent"], profiles[lane.name]["gentle-ai-worker"]);
+    assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, lane.name), false);
+    assert.equal(catalog.profiles.some(({ name }) => name === lane.name), false);
+    assert.deepEqual(deriveCanonicalProfileForSelection(lane.name, profiles, manifest), expected);
+    assert.deepEqual(deriveRuntimeModelProfilesForSelection(lane.name, profiles, manifest),
+      Object.fromEntries(Object.entries(expected).map(([agent, value]) => [agent, { model: value.model, effort: value.thinking }])));
+  }
 });
 
 test("separate provider profiles inherit their baselines, override implementation routes, and stay unpaired", async () => {

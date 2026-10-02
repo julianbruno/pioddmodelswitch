@@ -127,6 +127,18 @@
     {
       "name": "openai-sep",
       "modelsFile": "models.openai-sep.json"
+    },
+    {
+      "name": "gpt-6-1-lowcost",
+      "modelsFile": "models.gpt-6-1-lowcost.json"
+    },
+    {
+      "name": "gpt-6-1-recommended",
+      "modelsFile": "models.gpt-6-1-recommended.json"
+    },
+    {
+      "name": "gpt-6-1-powerful",
+      "modelsFile": "models.gpt-6-1-powerful.json"
     }
   ]
 }

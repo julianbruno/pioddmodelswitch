@@ -1,0 +1,15 @@
+{
+  "gentle-ai-explore": { "model": "openai/gpt-6-luna", "thinking": "medium" },
+  "gentle-ai-worker": { "model": "openai/gpt-6-luna", "thinking": "medium" },
+  "jd-fix-agent": { "model": "openai/gpt-6-luna", "thinking": "medium" },
+  "gentle-ai-verify": { "model": "openai/gpt-6.1-sol", "thinking": "medium" },
+  "orchestrator": { "model": "openai/gpt-6-luna", "thinking": "medium" },
+  "review-risk": { "model": "openai/gpt-6.1-sol", "thinking": "medium" },
+  "review-resilience": { "model": "openai/gpt-6.1-sol", "thinking": "medium" },
+  "review-readability": { "model": "openai/gpt-6.1-sol", "thinking": "medium" },
+  "review-reliability": { "model": "openai/gpt-6.1-sol", "thinking": "medium" },
+  "review-refuter": { "model": "openai/gpt-6.1-sol", "thinking": "medium" },
+  "review-validator": { "model": "openai/gpt-6.1-sol", "thinking": "medium" },
+  "jd-judge-a": { "model": "openai/gpt-6.1-sol", "thinking": "medium" },
+  "jd-judge-b": { "model": "openai/gpt-6.1-sol", "thinking": "medium" }
+}

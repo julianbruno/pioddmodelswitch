@@ -43,4 +43,23 @@ Version 1.3 registers every named profile from `config/named-profiles.json`: GPT
 
 For paired profiles, judge/reviewer agents use an opposite-provider profile in the same cost lane: GPT-family profiles route judges to the matching Grok lane, and Grok profiles route judges to the matching GPT-5.6 lane. Legacy `openai` still pairs with `grok`, and `grok` still pairs with `openai`. Unpaired profiles, including `openaigentle`, `gpt-5.5-powerful`, and `claude-opus-5.5`, retain their own judge mappings; `gpt-5.5-powerful` uses `openai-codex/gpt-5.5` for every agent. `claude-opus-5.5` uses `claude-bridge/claude-opus-5-5` for every agent, with task-aware medium effort for orchestration, exploration, implementation, and readability, and high effort for verification and risk-focused review. `jd-fix-agent` follows the implementation worker in every profile. `claude-sep` inherits the Opus profile but routes exploration and implementation (`gentle-ai-explore`, `gentle-ai-worker`, `jd-fix-agent`) to `claude-bridge/claude-sonnet-5` at high effort, and overrides inherited `review-readability` to `claude-bridge/claude-opus-5-5` at high effort. `openai-sep` inherits `openaigentle` but routes `gentle-ai-worker` and `jd-fix-agent` to `openai-codex/gpt-6-sol` at medium effort. Both stay unpaired, retaining their own judges and reviewers. Select them with `/jb-odd-models claude-sep` or `/jb-odd-models openai-sep`. Manifests without configured judge agents keep the previous uniform-profile behavior.
 
+### GPT-6.1 lanes
+
+Three standalone, unpaired profiles route every ODD role explicitly with `openai/gpt-6.1-sol` (Sol) and `openai/gpt-6-luna` (Luna). There is no GPT-6.1 Luna; the Luna route is the GPT-6 model also used by `openai6-1-gentle`. `gpt-6-1-powerful` uses Sol 6.1 where Astra 6.1 was requested, because Astra 6.1 is unavailable.
+
+| Profile | Orchestrator | Reasoning | Code | Light |
+|---|---|---|---|---|
+| `gpt-6-1-lowcost` | Luna medium | Sol medium | Luna medium | Luna medium |
+| `gpt-6-1-recommended` | Sol medium | Sol medium | Luna high | Luna medium |
+| `gpt-6-1-powerful` | Sol medium | Sol xhigh | Sol high | Luna high |
+
+| Role | Agents |
+|---|---|
+| Orchestrator | `orchestrator` |
+| Reasoning | `gentle-ai-verify`, `review-risk`, `review-resilience`, `review-readability`, `review-reliability`, `review-refuter`, `review-validator`, `jd-judge-a`, `jd-judge-b` |
+| Code | `gentle-ai-worker`, `jd-fix-agent` |
+| Light | `gentle-ai-explore` |
+
+These profiles are not in `config/named-profiles.json` and have no opposite-provider pair, so judges and reviewers keep the reasoning route above. Select one with `/jb-odd-models gpt-6-1-recommended` (or `gpt-6-1-lowcost` / `gpt-6-1-powerful`) after confirming both models are available through your Pi provider. The default profile stays `openaigentle`.
+
 It writes only the managed keys in the installed canonical and runtime mappings. Unrelated top-level JSON keys and unrelated `model_profiles` entries are preserved and reported by `doctor` rather than treated as errors.
