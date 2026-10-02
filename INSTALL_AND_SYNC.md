@@ -14,15 +14,15 @@ cd ~/miscodigos/pissdmodelswitch
 Then restart Pi and run:
 
 ```text
-/jb-sdd-odd-models status
-/jb-sdd-odd-models doctor
+/jb-odd-models status
+/jb-odd-models doctor
 ```
 
 If the active profile is not `gpt-5.6-recommended`, switch to it:
 
 ```text
-/jb-sdd-odd-models gpt-5.6-recommended
-/jb-sdd-odd-models status
+/jb-odd-models gpt-5.6-recommended
+/jb-odd-models status
 ```
 
 ## What the installer updates
@@ -32,7 +32,7 @@ By default that is `~/.pi`.
 
 It writes or updates:
 
-- `~/.pi/agent/extensions/sdd-model-profiles.ts`
+- `~/.pi/agent/extensions/odd-model-profiles.ts`
 - `~/.pi/agent/extensions/model-profiles/`
 - `~/.pi/gentle-ai/model-profiles.manifest.json`
 - registered profile files such as `~/.pi/gentle-ai/models.gpt-5.6-recommended.json`
@@ -58,14 +58,14 @@ The target `PI_HOME` must already contain an `agent/` directory.
 If installation refuses to write because a model-profile transaction or lock exists, inspect first:
 
 ```text
-/jb-sdd-odd-models doctor
+/jb-odd-models doctor
 ```
 
 Recover only when the diagnostic says it is safe:
 
 ```text
-/jb-sdd-odd-models recover
-/jb-sdd-odd-models doctor
+/jb-odd-models recover
+/jb-odd-models doctor
 ```
 
 ## Expected result
@@ -82,4 +82,3 @@ That means:
 |---|---|---|
 | Reasoning agents | `openai-codex/gpt-5.6-sol` | `medium` |
 | Code agents | `openai-codex/gpt-5.6-terra` | `high` |
-| Lightweight agents | `openai-codex/gpt-5.6-luna` | `high` |

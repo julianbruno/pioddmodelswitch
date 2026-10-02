@@ -29,8 +29,9 @@ Expected current result:
 |---|---|
 | `tests/manifest-validation.test.ts` | Validates manifest schema, package version, managed agent coverage, generated profile files, named-profile role expansion, opposite-provider judge pairing, and runtime derivation. |
 | `tests/installer-merge.test.ts` | Verifies installation into temporary `PI_HOME` fixtures, dynamic copying of every registered profile, default active profile derivation, backup behavior, idempotency, and Node version gating. |
-| `tests/command-behavior.test.ts` | Exercises the `/jb-sdd-odd-models` command seam with a fake Pi command context: completions, list, preview, session model/thinking alignment, no-op behavior, preflight failures, restoration, undo, recover, and transaction safety. |
+| `tests/command-behavior.test.ts` | Exercises the `/jb-odd-models` command seam with a fake Pi command context: completions, list, preview, session model/thinking alignment, no-op behavior, preflight failures, restoration, undo, recover, and transaction safety. |
 | `tests/doctor.test.ts` | Verifies read-only diagnostics for healthy state, drift, malformed journals, missing entries, catalog evidence, auth evidence, and effort compatibility. |
+| `tests/odd-only.test.ts` | Guards the ODD-only contract: no packaged profile contains retired routes, runtime derivation removes exactly those routes, and only `/jb-odd-models` is registered. |
 | `tests/transaction-recovery.test.ts` | Tests the transaction layer directly: locks, rollback, interrupted writes, recovery, undo, and external-change guards. |
 
 ## Focused test commands
@@ -49,6 +50,9 @@ node --experimental-strip-types --test tests/command-behavior.test.ts
 
 # Doctor diagnostics
 node --experimental-strip-types --test tests/doctor.test.ts
+
+# ODD-only contract and retired-route removal
+node --experimental-strip-types --test tests/odd-only.test.ts
 
 # Transaction safety and recovery
 node --experimental-strip-types --test tests/transaction-recovery.test.ts
@@ -103,7 +107,9 @@ node --experimental-strip-types --test tests/installer-merge.test.ts
 The installer tests verify that:
 
 - all manifest-registered profile files are copied;
-- active `models.json` is derived from the manifest default profile;
+- active `models.json` follows the active registered profile, or the manifest default when none matches;
+- the 13 retired routes are removed while similarly named custom entries stay;
+- a released predecessor extension moves into the backup, and an unrecognized one stops the install before any write;
 - runtime `subagents.json.model_profiles` is merged without deleting unrelated entries;
 - backups are created only when existing files change;
 - repeat installs are byte no-ops;
@@ -174,6 +180,6 @@ Only install into a real Pi home when explicitly intended:
 After real installation, restart Pi and verify manually:
 
 ```text
-/jb-sdd-odd-models status
-/jb-sdd-odd-models doctor
+/jb-odd-models status
+/jb-odd-models doctor
 ```

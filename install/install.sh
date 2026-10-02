@@ -2,7 +2,7 @@
 set -eu
 
 fail() {
-  printf 'jb-sdd-odd-models installer: %s\n' "$*" >&2
+  printf 'jb-odd-models installer: %s\n' "$*" >&2
   exit 1
 }
 

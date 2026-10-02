@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import sddModelProfiles from "../extensions/sdd-model-profiles.ts";
+import oddModelProfiles from "../extensions/odd-model-profiles.ts";
 
 type RegisteredCommand = {
   description: string;
@@ -26,7 +26,7 @@ type FakeCommandContext = {
   thinkingLevel?: string;
 };
 
-const agents = ["sdd-init", "sdd-explore", "sdd-research", "gentle-ai-worker"];
+const agents = ["gentle-ai-explore", "gentle-ai-verify", "jd-fix-agent", "gentle-ai-worker"];
 
 function profile(modelPrefix: string, effort = "high"): Record<string, { model: string; thinking: string }> {
   return Object.fromEntries(agents.map((agent) => [agent, { model: `${modelPrefix}/${agent}`, thinking: effort }]));
@@ -72,9 +72,9 @@ async function createHarness(effort = "high") {
   await mkdir(agentDir, { recursive: true });
 
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     defaultProfile: "openai",
-    managedAgentGroups: { sdd: ["sdd-init", "sdd-explore", "sdd-research"], odd: ["gentle-ai-worker"] },
+    managedAgentGroups: { odd: ["gentle-ai-explore", "gentle-ai-verify", "jd-fix-agent", "gentle-ai-worker"] },
     reservedCommandNames: ["status", "list", "preview", "doctor", "undo", "recover"],
     profiles: [
       { name: "openai", modelsFile: "models.openai.json" },
@@ -95,8 +95,8 @@ async function createHarness(effort = "high") {
   });
 
   const commands = new Map<string, RegisteredCommand>();
-  sddModelProfiles({ registerCommand: (name: string, command: RegisteredCommand) => commands.set(name, command) } as any, { piHome });
-  const command = commands.get("jb-sdd-odd-models");
+  oddModelProfiles({ registerCommand: (name: string, command: RegisteredCommand) => commands.set(name, command) } as any, { piHome });
+  const command = commands.get("jb-odd-models");
   assert.ok(command);
 
   const notifications: Array<{ message: string; level: string }> = [];
@@ -116,7 +116,7 @@ async function createHarness(effort = "high") {
       getProviderAuthStatus: (provider) => ({ configured: provider === "known", source: provider === "known" ? "stored" : undefined }),
       getProviderDisplayName: (provider) => provider,
     },
-    model: { provider: "known", id: "sdd-init" },
+    model: { provider: "known", id: "gentle-ai-explore" },
     thinkingLevel: "high",
   };
 
@@ -149,8 +149,8 @@ test("doctor is offered in completion/help and performs a read-only healthy diag
   assert.equal(harness.reloadCount(), 0);
   assert.equal(harness.notifications.at(-1)?.level, "info");
   assert.match(message, /Doctor summary: no blocking errors/i);
-  assert.match(message, /Active SDD\/ODD profile: openai/);
-  assert.match(message, /Catalog: known\/sdd-init found, effort high compatible/);
+  assert.match(message, /Active ODD profile: openai/);
+  assert.match(message, /Catalog: known\/gentle-ai-explore found, effort high compatible/);
   assert.match(message, /Provider auth: known configured \(stored\)/);
   assert.match(message, /Unrelated runtime mappings preserved: unrelatedAgent/);
   assert.match(message, /does not prove effective project routing/i);
@@ -161,9 +161,9 @@ test("doctor reports malformed journals, drift, missing entries, catalog bounds,
   const harness = await createHarness();
   const canonical = await readJson(harness.canonicalPath);
   const runtime = await readJson(harness.runtimePath);
-  delete canonical["sdd-research"];
-  runtime.model_profiles["sdd-explore"] = { model: "known/sdd-explore", effort: "low" };
-  runtime.model_profiles["sdd-research"] = { model: "unknown/missing-model", effort: "xhigh" };
+  delete canonical["jd-fix-agent"];
+  runtime.model_profiles["gentle-ai-verify"] = { model: "known/gentle-ai-verify", effort: "low" };
+  runtime.model_profiles["jd-fix-agent"] = { model: "unknown/missing-model", effort: "xhigh" };
   runtime.model_profiles["gentle-ai-worker"] = { model: "known/gentle-ai-worker", effort: "xhigh" };
   await writeJson(harness.canonicalPath, canonical);
   await writeJson(harness.runtimePath, runtime);
@@ -181,8 +181,8 @@ test("doctor reports malformed journals, drift, missing entries, catalog bounds,
   assert.match(message, /Doctor summary: issues found/i);
   assert.match(message, /Active transaction journal is malformed/i);
   assert.match(message, /Transaction history is malformed/i);
-  assert.match(message, /models\.json\.sdd-research is missing/);
-  assert.match(message, /Drift: sdd-explore canonical known\/sdd-explore \(high\) != runtime known\/sdd-explore \(low\)/);
+  assert.match(message, /models\.json\.jd-fix-agent is missing/);
+  assert.match(message, /Drift: gentle-ai-verify canonical known\/gentle-ai-verify \(high\) != runtime known\/gentle-ai-verify \(low\)/);
   assert.match(message, /Catalog: unknown\/missing-model is not in the effective local catalog/);
   assert.match(message, /Effort: known\/gentle-ai-worker does not advertise xhigh support/);
   assert.match(message, /Doctor is read-only; no files were repaired or reclaimed/);
@@ -220,7 +220,7 @@ for (const evidence of effortEvidenceCases) {
     const message = harness.notifications.at(-1)?.message ?? "";
 
     assert.equal(harness.notifications.at(-1)?.level, evidence.supported ? "info" : "warning");
-    assert.match(message, /Active SDD\/ODD profile: openai/);
+    assert.match(message, /Active ODD profile: openai/);
     for (const agent of agents) {
       const compatible = `Catalog: known/${agent} found, effort ${evidence.effort} compatible.`;
       const unsupported = `Effort: known/${agent} does not advertise ${evidence.effort} support`;

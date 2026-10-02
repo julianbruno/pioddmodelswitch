@@ -22,21 +22,6 @@ import {
   type ValidatedModelProfile,
 } from "../extensions/model-profiles/core.ts";
 
-const expectedSddAgents = [
-  "sdd-init",
-  "sdd-explore",
-  "sdd-research",
-  "sdd-proposal",
-  "sdd-spec",
-  "sdd-design",
-  "sdd-tasks",
-  "sdd-onboard",
-  "sdd-archive",
-  "sdd-apply",
-  "sdd-verify",
-  "sdd-status",
-  "sdd-sync",
-];
 const expectedOddAgents = ["gentle-ai-explore", "gentle-ai-worker", "gentle-ai-verify", "orchestrator", "jd-fix-agent"];
 const expectedJudgeAgents = [
   "review-risk",
@@ -48,22 +33,14 @@ const expectedJudgeAgents = [
   "jd-judge-a",
   "jd-judge-b",
 ];
-const expectedAgents = [...expectedSddAgents, ...expectedOddAgents, ...expectedJudgeAgents];
-const expectedNonJudgeAgents = [...expectedSddAgents, ...expectedOddAgents];
+const expectedAgents = [...expectedOddAgents, ...expectedJudgeAgents];
+const expectedNonJudgeAgents = [...expectedOddAgents];
 const roleExpansion: Record<string, string[]> = {
   orquestador: ["orchestrator"],
-  razonamiento: [
-    "sdd-explore",
-    "sdd-research",
-    "sdd-proposal",
-    "sdd-design",
-    "sdd-verify",
-    "gentle-ai-explore",
-    "gentle-ai-verify",
-    ...expectedJudgeAgents,
-  ],
-  codigo: ["sdd-apply", "gentle-ai-worker", "jd-fix-agent"],
-  liviano: ["sdd-init", "sdd-spec", "sdd-tasks", "sdd-onboard", "sdd-archive", "sdd-status", "sdd-sync"],
+  razonamiento: ["gentle-ai-explore", "gentle-ai-verify", ...expectedJudgeAgents],
+  codigo: ["gentle-ai-worker", "jd-fix-agent"],
+  // The catalog keeps the lightweight role, but no managed ODD agent uses it.
+  liviano: [],
 };
 const expectedOppositePairs: Record<string, string> = {
   "gpt-5.6-low-cost": "grok-low-cost",
@@ -121,10 +98,9 @@ function expectedFullProfile(namedProfile: NamedProfilesCatalog["profiles"][numb
 
 function validManifestPatch(patch: Record<string, unknown>): unknown {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     defaultProfile: "gpt-5.6-recommended",
     managedAgentGroups: {
-      sdd: expectedSddAgents,
       odd: expectedOddAgents,
     },
     reservedCommandNames: [...RESERVED_COMMAND_NAMES],
@@ -159,9 +135,8 @@ test("claude-opus-5.5 has exact task-aware effort categories and one model", asy
   const manifest = await packagedManifest();
   const profile = (await packagedProfiles(manifest))["claude-opus-5.5"];
   const categories: Record<string, string[]> = {
-    low: ["sdd-init", "sdd-onboard", "sdd-archive", "sdd-status", "sdd-sync"],
-    medium: ["sdd-explore", "sdd-spec", "sdd-tasks", "sdd-apply", "gentle-ai-explore", "gentle-ai-worker", "jd-fix-agent", "orchestrator", "review-readability"],
-    high: ["sdd-research", "sdd-proposal", "sdd-design", "sdd-verify", "gentle-ai-verify", "review-risk", "review-resilience", "review-reliability", "review-refuter", "review-validator", "jd-judge-a", "jd-judge-b"],
+    medium: ["gentle-ai-explore", "gentle-ai-worker", "jd-fix-agent", "orchestrator", "review-readability"],
+    high: ["gentle-ai-verify", "review-risk", "review-resilience", "review-reliability", "review-refuter", "review-validator", "jd-judge-a", "jd-judge-b"],
   };
   assert.deepEqual(Object.keys(profile).sort(), managedAgents(manifest).sort());
   for (const [thinking, agents] of Object.entries(categories)) {
@@ -178,10 +153,9 @@ test("packaged manifest defaults to openaigentle and registers named profiles pl
   const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep"];
   assert.ok(namedProfileNames.includes("gpt-5.5-powerful"));
 
-  assert.equal(manifest.schemaVersion, 1);
+  assert.equal(manifest.schemaVersion, 2);
   assert.equal(manifest.defaultProfile, "openaigentle");
   assert.deepEqual(manifest.managedAgentGroups, {
-    sdd: expectedSddAgents,
     odd: expectedOddAgents,
   });
   assert.deepEqual(manifest.reservedCommandNames, [...RESERVED_COMMAND_NAMES]);
@@ -197,10 +171,9 @@ test("packaged manifest defaults to openaigentle and registers named profiles pl
 
 test("manifests without configured opposite-provider judges preserve legacy managed coverage", () => {
   const legacyManifest = validateManifest({
-    schemaVersion: 1,
+    schemaVersion: 2,
     defaultProfile: "openai",
     managedAgentGroups: {
-      sdd: expectedSddAgents,
       odd: expectedOddAgents,
     },
     reservedCommandNames: [...RESERVED_COMMAND_NAMES],
@@ -266,14 +239,11 @@ test("openaigentle preserves the supplied GPT-6 mapping in canonical and runtime
   const manifest = await packagedManifest();
   const profiles = await packagedProfiles(manifest);
   const expected = Object.fromEntries([
-    ...["sdd-init", "sdd-onboard", "sdd-status", "sdd-sync", "orchestrator"].map((agent) =>
-      [agent, { model: "openai-codex/gpt-6-sol", thinking: "medium" }]),
-    ...["sdd-explore", "sdd-spec", "sdd-tasks", "gentle-ai-explore"].map((agent) =>
-      [agent, { model: "openai-codex/gpt-6-luna", thinking: "high" }]),
-    ["sdd-archive", { model: "openai-codex/gpt-6-luna", thinking: "max" }],
-    ...["sdd-apply", "gentle-ai-worker", "jd-fix-agent"].map((agent) =>
+    ["orchestrator", { model: "openai-codex/gpt-6-sol", thinking: "medium" }],
+    ["gentle-ai-explore", { model: "openai-codex/gpt-6-luna", thinking: "high" }],
+    ...["gentle-ai-worker", "jd-fix-agent"].map((agent) =>
       [agent, { model: "openai-codex/gpt-6-sol", thinking: "low" }]),
-    ...["sdd-research", "sdd-proposal", "sdd-design", "sdd-verify", "gentle-ai-verify", ...expectedJudgeAgents].map((agent) =>
+    ...["gentle-ai-verify", ...expectedJudgeAgents].map((agent) =>
       [agent, { model: "openai-codex/gpt-6-sol", thinking: "high" }]),
   ]);
 
@@ -295,8 +265,8 @@ test("openai6-1-gentle uses registered OpenAI Sol and Luna routes and preserves 
   assert.equal(manifest.defaultProfile, "openaigentle");
   assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, name), false);
   assert.deepEqual(Object.keys(profiles[name]), Object.keys(profiles.openaigentle));
-  assert.equal(Object.values(profiles[name]).filter(({ model }) => model === "openai/gpt-6.1-sol").length, 21);
-  assert.equal(Object.values(profiles[name]).filter(({ model }) => model === "openai/gpt-6-luna").length, 5);
+  assert.equal(Object.values(profiles[name]).filter(({ model }) => model === "openai/gpt-6.1-sol").length, 12);
+  assert.equal(Object.values(profiles[name]).filter(({ model }) => model === "openai/gpt-6-luna").length, 1);
   assert.ok(Object.values(profiles[name]).every(({ model }) => ["openai/gpt-6.1-sol", "openai/gpt-6-luna"].includes(model)));
   assert.deepEqual(profiles[name], expected);
   assert.deepEqual(deriveCanonicalProfileForSelection(name, profiles, manifest), expected);
@@ -309,8 +279,8 @@ test("separate provider profiles inherit their baselines, override implementatio
   const manifest = await packagedManifest();
   const profiles = await packagedProfiles(manifest);
   const routes = [
-    { name: "claude-sep", baseline: "claude-opus-5.5", overrides: ["sdd-explore", "gentle-ai-explore", "sdd-apply", "gentle-ai-worker", "jd-fix-agent"], entry: { model: "claude-bridge/claude-sonnet-5", thinking: "high" }, explicit: { "review-readability": { model: "claude-bridge/claude-opus-5-5", thinking: "high" } } },
-    { name: "openai-sep", baseline: "openaigentle", overrides: ["sdd-apply", "gentle-ai-worker", "jd-fix-agent"], entry: { model: "openai-codex/gpt-6-sol", thinking: "medium" } },
+    { name: "claude-sep", baseline: "claude-opus-5.5", overrides: ["gentle-ai-explore", "gentle-ai-worker", "jd-fix-agent"], entry: { model: "claude-bridge/claude-sonnet-5", thinking: "high" }, explicit: { "review-readability": { model: "claude-bridge/claude-opus-5-5", thinking: "high" } } },
+    { name: "openai-sep", baseline: "openaigentle", overrides: ["gentle-ai-worker", "jd-fix-agent"], entry: { model: "openai-codex/gpt-6-sol", thinking: "medium" } },
   ];
   for (const { name, baseline, overrides, entry, explicit = {} } of routes) {
     const expected = { ...profiles[baseline], ...Object.fromEntries(overrides.map((agent) => [agent, entry])), ...explicit };
@@ -336,15 +306,22 @@ test("claude-opus-5.5 is standalone, unpaired, and preserves its calibrated effo
     Object.fromEntries(expectedAgents.map((agent) => [agent, {
       model: "claude-bridge/claude-opus-5-5", effort: expected[agent].thinking,
     }])));
-  assert.equal(expected["sdd-archive"].thinking, "low");
+  assert.equal(expected.orchestrator.thinking, "medium");
 });
 
 test("manifest validation rejects unsupported versions, missing groups, duplicate names, and reserved commands", () => {
-  assert.throws(() => validateManifest(validManifestPatch({ schemaVersion: 2 })), /schemaVersion must be 1/);
-  assert.throws(() => validateManifest(validManifestPatch({ managedAgentGroups: { sdd: expectedSddAgents } })), /managedAgentGroups.*expected keys/);
+  assert.throws(() => validateManifest(validManifestPatch({ schemaVersion: 1 })), /schemaVersion must be 2/);
+  assert.throws(() => validateManifest(validManifestPatch({ managedAgentGroups: {} })), /managedAgentGroups.*expected keys.*missing: odd/);
+  // A schema 1 group layout fails closed instead of reintroducing retired routes.
   assert.throws(() => validateManifest(validManifestPatch({
-    managedAgentGroups: { sdd: ["sdd-init", "sdd-init"], odd: expectedOddAgents },
-  })), /duplicate value 'sdd-init'/);
+    managedAgentGroups: { sdd: ["sdd-init"], odd: expectedOddAgents },
+  })), /managedAgentGroups.*extra: sdd/);
+  assert.throws(() => validateManifest(validManifestPatch({
+    managedAgentGroups: { odd: [...expectedOddAgents, "sdd-init"] },
+  })), /retired agent 'sdd-init'/);
+  assert.throws(() => validateManifest(validManifestPatch({
+    managedAgentGroups: { odd: ["orchestrator", "orchestrator"] },
+  })), /duplicate value 'orchestrator'/);
   assert.throws(() => validateManifest(validManifestPatch({
     profiles: [
       { name: "gpt-5.6-recommended", modelsFile: "models.gpt-5.6-recommended.json" },
@@ -365,7 +342,7 @@ test("profile validation rejects malformed objects, coverage drift, invalid iden
   const manifest = validateManifest(validManifestPatch({}));
   assert.throws(() => validateNamedProfile([], manifest, "arrayProfile"), /must be a JSON object/);
 
-  for (const agent of ["sdd-research", "orchestrator", "review-refuter", "review-validator"]) {
+  for (const agent of ["gentle-ai-verify", "orchestrator", "review-refuter", "review-validator"]) {
     const missing = validProfilePatch({});
     delete missing[agent];
     assert.throws(() => validateNamedProfile(missing, manifest, "missingProfile"), new RegExp(`missing: ${agent}`));
@@ -373,17 +350,20 @@ test("profile validation rejects malformed objects, coverage drift, invalid iden
 
   const extra = validProfilePatch({ "unknown-agent": { model: "provider/model", thinking: "medium" } });
   assert.throws(() => validateNamedProfile(extra, manifest, "extraProfile"), /extra: unknown-agent/);
+  // Retired schema 1 routes are no longer managed, so packaged profiles cannot carry them.
+  const retired = validProfilePatch({ "sdd-init": { model: "provider/model", thinking: "medium" } });
+  assert.throws(() => validateNamedProfile(retired, manifest, "retiredProfile"), /extra: sdd-init/);
 
-  assert.throws(() => validateNamedProfile(validProfilePatch({ "sdd-init": [] }), manifest, "badEntry"), /must be a JSON object/);
-  assert.throws(() => validateNamedProfile(validProfilePatch({ "sdd-init": { model: "provider/model", thinking: "medium", extra: true } }), manifest, "badEntry"), /expected keys/);
-  assert.throws(() => validateNamedProfile(validProfilePatch({ "sdd-init": { model: "provider-only", thinking: "medium" } }), manifest, "badModel"), /provider\/model identifier/);
+  assert.throws(() => validateNamedProfile(validProfilePatch({ "gentle-ai-explore": [] }), manifest, "badEntry"), /must be a JSON object/);
+  assert.throws(() => validateNamedProfile(validProfilePatch({ "gentle-ai-explore": { model: "provider/model", thinking: "medium", extra: true } }), manifest, "badEntry"), /expected keys/);
+  assert.throws(() => validateNamedProfile(validProfilePatch({ "gentle-ai-explore": { model: "provider-only", thinking: "medium" } }), manifest, "badModel"), /provider\/model identifier/);
   for (const thinking of ["", " ", "\t\n", " max", "max ", 0, false, null, [], {}]) {
     assert.throws(() => validateNamedProfile(validProfilePatch({
-      "sdd-init": { model: "provider/model", thinking },
+      "gentle-ai-explore": { model: "provider/model", thinking },
     }), manifest, "badEffort"), /thinking must be (?:a string|a non-empty, trimmed string)/);
   }
   assert.throws(() => validateNamedProfile(validProfilePatch({
-    "sdd-init": { model: "provider/model" },
+    "gentle-ai-explore": { model: "provider/model" },
   }), manifest, "missingEffort"), /missing: thinking/);
 
   assert.throws(() => validateProfileSet({ "gpt-5.6-recommended": validProfilePatch({}) }, manifest), /missing: grok-recommended/);
@@ -393,11 +373,11 @@ test("profile validation rejects malformed objects, coverage drift, invalid iden
 test("profile validation and derivation preserve arbitrary trimmed effort strings literally", () => {
   const manifest = validateManifest(validManifestPatch({}));
   for (const thinking of ["low", "medium", "high", "xhigh", "max", "extreme", "Provider.Custom-v2", "custom effort"]) {
-    const input = validProfilePatch({ "sdd-init": { model: "provider/model", thinking } });
+    const input = validProfilePatch({ "gentle-ai-explore": { model: "provider/model", thinking } });
     const validated = validateNamedProfile(input, manifest);
-    assert.deepEqual(validated["sdd-init"], input["sdd-init"]);
-    assert.deepEqual(deriveCanonicalProfile(validated, manifest)["sdd-init"], input["sdd-init"]);
-    assert.deepEqual(deriveRuntimeModelProfiles(validated, manifest)["sdd-init"], {
+    assert.deepEqual(validated["gentle-ai-explore"], input["gentle-ai-explore"]);
+    assert.deepEqual(deriveCanonicalProfile(validated, manifest)["gentle-ai-explore"], input["gentle-ai-explore"]);
+    assert.deepEqual(deriveRuntimeModelProfiles(validated, manifest)["gentle-ai-explore"], {
       model: "provider/model", effort: thinking,
     });
   }
@@ -429,7 +409,7 @@ test("opposite-provider judge derivation pairs representative named profiles by 
   const disabledOpenaiEffective = deriveCanonicalProfileForSelection("gpt-5.6-recommended", disabledProfiles, disabledManifest);
   const disabledOpenaiRuntime = deriveRuntimeModelProfilesForSelection("gpt-5.6-recommended", disabledProfiles, disabledManifest);
 
-  assert.deepEqual(lowCostEffective["sdd-init"], profiles["gpt-5.6-low-cost"]["sdd-init"]);
+  assert.deepEqual(lowCostEffective["gentle-ai-explore"], profiles["gpt-5.6-low-cost"]["gentle-ai-explore"]);
   assert.deepEqual(lowCostEffective.orchestrator, profiles["gpt-5.6-low-cost"].orchestrator);
   for (const agent of expectedJudgeAgents) {
     assert.deepEqual(lowCostEffective[agent], profiles["grok-low-cost"][agent]);
@@ -460,14 +440,14 @@ test("canonical and runtime derivation are pure and map thinking to effort", asy
     preserved: true,
     model_profiles: {
       unrelatedAgent: { model: "keep/runtime", effort: "low" },
-      "sdd-research": { model: "stale/research", effort: "low" },
+      "gentle-ai-verify": { model: "stale/research", effort: "low" },
     },
   });
 
   assert.notEqual(canonical, defaultProfile);
-  assert.notEqual(canonical["sdd-research"], defaultProfile["sdd-research"]);
+  assert.notEqual(canonical["gentle-ai-verify"], defaultProfile["gentle-ai-verify"]);
   assert.deepEqual(canonical, defaultProfile);
-  assert.deepEqual(runtimeProfiles["sdd-research"], { model: defaultProfile["sdd-research"].model, effort: defaultProfile["sdd-research"].thinking });
+  assert.deepEqual(runtimeProfiles["gentle-ai-verify"], { model: defaultProfile["gentle-ai-verify"].model, effort: defaultProfile["gentle-ai-verify"].thinking });
   assert.deepEqual(runtimeConfig, {
     preserved: true,
     model_profiles: {
@@ -476,7 +456,7 @@ test("canonical and runtime derivation are pure and map thinking to effort", asy
     },
   });
 
-  const originalResearchThinking = defaultProfile["sdd-research"].thinking;
-  canonical["sdd-research"].thinking = "low";
-  assert.equal(defaultProfile["sdd-research"].thinking, originalResearchThinking);
+  const originalResearchThinking = defaultProfile["gentle-ai-verify"].thinking;
+  canonical["gentle-ai-verify"].thinking = "low";
+  assert.equal(defaultProfile["gentle-ai-verify"].thinking, originalResearchThinking);
 });

@@ -6,19 +6,19 @@ This package is a small configuration-and-extension layer. It does not bundle Pi
 
 | Component | Responsibility | Does not own |
 |---|---|---|
-| `extensions/sdd-model-profiles.ts` | Registers `/jb-sdd-odd-models`, validates SDD/ODD profiles through shared helpers, reports status/list/preview/doctor, switches profiles, undoes/recover transactions, and requests reload after changed mutations. | Provider authentication, model execution, model catalog generation, or agent definitions. |
+| `extensions/odd-model-profiles.ts` | Registers `/jb-odd-models`, validates ODD profiles through shared helpers, reports status/list/preview/doctor, switches profiles, undoes/recover transactions, and requests reload after changed mutations. | Provider authentication, model execution, model catalog generation, or agent definitions. |
 | `extensions/model-profiles/core.ts` | Owns manifest/profile validation, opposite-provider judge selection, and canonical/runtime derivation. | Pi extension registration. |
 | `extensions/model-profiles/transaction.ts` | Owns read/write transaction locking, active journal, history, guarded undo, recovery, and read-only inspection diagnostics. | Choosing model profiles or repairing malformed state automatically. |
 | `config/model-profiles.manifest.json` | Defines schema version, managed agent groups, opposite-provider judge routing, default profile, reserved command names, and registered profile files. | Runtime behavior outside declared mappings. |
-| `config/models.<profile>.json` | Defines each canonical model profile; version 1.3 materializes every role-based profile from `config/named-profiles.json`, legacy aliases, and standalone `claude-opus-5.5`. Active files are derived from the manifest default at install time. | Runtime behavior or user overrides. |
-| `install/install.sh` and `install/model-profiles-install.ts` | Enforce the Node strip-types minimum, validate assets, back up changed targets, install extension/helper layout, and perform a merge-friendly runtime update. | Installing Gentle Pi, credentials, or providers. |
+| `config/models.<profile>.json` | Defines each canonical model profile; version 1.3 materializes every role-based profile from `config/named-profiles.json`, legacy aliases, and standalone `claude-opus-5.5`. At install time, active files follow the currently active registered profile, or the manifest default when none matches. | Runtime behavior or user overrides. |
+| `install/install.sh` and `install/model-profiles-install.ts` | Enforce the Node strip-types minimum, validate assets, back up changed targets, install extension/helper layout, retire the released predecessor extension into the backup, and perform a merge-friendly runtime update that removes retired routes. | Installing Gentle Pi, credentials, or providers. |
 | Documentation | Explains operation, recovery, and limitations. | A license grant; see `NOTICE.md`. |
 
 ## Dependency boundaries
 
 ```text
 Gentle Pi extension host
-  └─ loads sdd-model-profiles.ts
+  └─ loads odd-model-profiles.ts
        ├─ reads/writes $PI_HOME/gentle-ai model profiles
        ├─ reads/writes $PI_HOME/agent/subagents.json
        ├─ inspects $PI_HOME/gentle-ai/.model-profiles-transactions
@@ -37,7 +37,7 @@ Provider authentication/model catalog
 
 ## Installation boundary
 
-The installer writes only beneath `PI_HOME` at installation time. It validates the versioned manifest and every registered profile before writing, derives active `models.json` and merged `subagents.json` entries from the default named profile using the same opposite-provider judge logic as the command, preserves unrelated JSON keys, and creates timestamped backups for existing targets whose content changes. It also installs `extensions/model-profiles/core.ts` and `extensions/model-profiles/transaction.ts` next to the command extension, which is required for the installed command to load.
+The installer writes only beneath `PI_HOME` at installation time. It validates the versioned manifest and every registered profile before writing, derives active `models.json` and merged `subagents.json` entries from the currently active registered profile (or the default profile when no registered profile matches) using the same opposite-provider judge logic as the command, preserves unrelated JSON keys, and creates timestamped backups for existing targets whose content changes. It also installs `extensions/model-profiles/core.ts` and `extensions/model-profiles/transaction.ts` next to the command extension, which is required for the installed command to load.
 
 The packaged extension resolves Pi home from `PI_HOME` when set, otherwise retaining `~/.pi` behavior. A custom value must be exported into the Pi process as well as the installer process. Profile names are path-safe command arguments: lowercase alphanumeric segments separated by `-` or `.`, with no spaces or path separators.
 

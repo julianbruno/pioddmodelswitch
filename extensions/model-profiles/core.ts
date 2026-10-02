@@ -1,5 +1,22 @@
-export const SUPPORTED_SCHEMA_VERSION = 1;
-export const REQUIRED_MANAGED_AGENT_GROUPS = ["sdd", "odd"] as const;
+export const SUPPORTED_SCHEMA_VERSION = 2;
+export const REQUIRED_MANAGED_AGENT_GROUPS = ["odd"] as const;
+// Migration-only: exact routes managed by schema 1. Future installs and switches remove these
+// keys from canonical and runtime state; similarly named custom routes stay user-owned.
+export const RETIRED_MANAGED_AGENTS = [
+  "sdd-init",
+  "sdd-explore",
+  "sdd-research",
+  "sdd-proposal",
+  "sdd-spec",
+  "sdd-design",
+  "sdd-tasks",
+  "sdd-onboard",
+  "sdd-archive",
+  "sdd-apply",
+  "sdd-verify",
+  "sdd-status",
+  "sdd-sync",
+] as const;
 export const KNOWN_OPPOSITE_PROVIDER_JUDGES = [
   "review-risk",
   "review-resilience",
@@ -53,6 +70,7 @@ const safeNamePattern = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 const providerModelPattern = /^[^/\s]+\/[^/\s]+$/;
 const builtInReservedCommandSet = new Set<string>(RESERVED_COMMAND_NAMES);
 const knownOppositeProviderJudgeSet = new Set<string>(KNOWN_OPPOSITE_PROVIDER_JUDGES);
+const retiredManagedAgentSet = new Set<string>(RETIRED_MANAGED_AGENTS);
 
 export class ModelProfileValidationError extends Error {
   constructor(message: string) {
@@ -194,7 +212,10 @@ function assertManagedAgentGroups(value: unknown): Record<ManagedAgentGroupName,
   for (const groupName of REQUIRED_MANAGED_AGENT_GROUPS) {
     const agents = assertStringArray(groups[groupName], `managedAgentGroups.${groupName}`);
     if (!agents.length) fail(`managedAgentGroups.${groupName} must not be empty.`);
-    agents.forEach((agent, index) => assertSafeName(agent, `managedAgentGroups.${groupName}[${index}]`));
+    agents.forEach((agent, index) => {
+      assertSafeName(agent, `managedAgentGroups.${groupName}[${index}]`);
+      if (retiredManagedAgentSet.has(agent)) fail(`managedAgentGroups.${groupName}[${index}] is retired agent '${agent}'.`);
+    });
     assertUnique(agents, `managedAgentGroups.${groupName}`);
     result[groupName] = agents;
     allAgents.push(...agents);
@@ -299,8 +320,16 @@ export function deriveRuntimeModelProfiles(profile: ValidatedModelProfile, manif
   );
 }
 
+export function hasRetiredManagedAgents(value: JsonObject): boolean {
+  return RETIRED_MANAGED_AGENTS.some((agent) => Object.prototype.hasOwnProperty.call(value, agent));
+}
+
+export function withoutRetiredManagedAgents(value: JsonObject): JsonObject {
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !retiredManagedAgentSet.has(key)));
+}
+
 export function deriveRuntimeConfig(profile: ValidatedModelProfile, manifest: ModelProfilesManifest, base: JsonObject = {}): JsonObject {
-  const preservedModelProfiles = isJsonObject(base.model_profiles) ? base.model_profiles : {};
+  const preservedModelProfiles = isJsonObject(base.model_profiles) ? withoutRetiredManagedAgents(base.model_profiles) : {};
   return {
     ...base,
     model_profiles: {

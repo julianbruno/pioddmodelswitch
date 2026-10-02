@@ -1,37 +1,37 @@
 # Understand how model switching works
 
-`/jb-sdd-odd-models` keeps a human-facing canonical profile and the Gentle Pi runtime mapping aligned for the managed SDD/ODD agents and any configured judge/reviewer agents. Profile names, managed agents, and opposite-provider judge routing are read from `gentle-ai/model-profiles.manifest.json`; named profile data lives in `gentle-ai/models.<profile>.json`.
+`/jb-odd-models` keeps a human-facing canonical profile and the Gentle Pi runtime mapping aligned for the managed ODD agents and any configured judge/reviewer agents. Profile names, managed agents, and opposite-provider judge routing are read from `gentle-ai/model-profiles.manifest.json`; named profile data lives in `gentle-ai/models.<profile>.json`.
 
 ## Data flow
 
 ```mermaid
 flowchart LR
-  C["/jb-sdd-odd-models <profile>"] --> M["model-profiles.manifest.json"]
+  C["/jb-odd-models <profile>"] --> M["model-profiles.manifest.json"]
   M --> P["models.<profile>.json"]
   P --> V["Validate exact managed-agent profile"]
   V --> O["Apply opposite-provider judge routing for paired profiles"]
   O --> A["gentle-ai/models.json\nmodel + thinking"]
   O --> R["agent/subagents.json\nmodel_profiles: model + effort"]
   R --> G["Gentle Pi native agent runtime"]
-  G --> S["SDD/ODD agent invocation"]
+  G --> S["ODD agent invocation"]
   A --> T["status/preview/doctor detection"]
   R --> T
 ```
 
-Paths are relative to `PI_HOME`, which defaults to `~/.pi`. The extension also imports helper modules from `extensions/model-profiles/`, so installed packages must ship that directory next to `extensions/sdd-model-profiles.ts`.
+Paths are relative to `PI_HOME`, which defaults to `~/.pi`. The extension also imports helper modules from `extensions/model-profiles/`, so installed packages must ship that directory next to `extensions/odd-model-profiles.ts`.
 
 ## Commands
 
 | Command | Writes files | Reloads Pi | Purpose |
 |---|---:|---:|---|
-| `/jb-sdd-odd-models` | No | No | Status plus usage. |
-| `/jb-sdd-odd-models status` | No | No | Active-state and drift report. |
-| `/jb-sdd-odd-models doctor` | No | No | Read-only diagnostics for files, local catalog evidence, auth status evidence, and transaction journals/locks. |
-| `/jb-sdd-odd-models list` | No | No | Registered profiles from the manifest. |
-| `/jb-sdd-odd-models preview <profile>` | No | No | Before → after canonical/runtime mapping for each managed agent. |
-| `/jb-sdd-odd-models <profile>` | Yes, unless already aligned | Yes, only after writes | Activate a registered profile. |
-| `/jb-sdd-odd-models undo` | Yes, if safe | Yes, after undo | Revert the last completed transaction when no intervening edits exist. |
-| `/jb-sdd-odd-models recover` | Sometimes | Yes, after changed recovery | Finish, record, or clear an interrupted transaction from recorded safe states. |
+| `/jb-odd-models` | No | No | Status plus usage. |
+| `/jb-odd-models status` | No | No | Active-state and drift report. |
+| `/jb-odd-models doctor` | No | No | Read-only diagnostics for files, local catalog evidence, auth status evidence, and transaction journals/locks. |
+| `/jb-odd-models list` | No | No | Registered profiles from the manifest. |
+| `/jb-odd-models preview <profile>` | No | No | Before → after canonical/runtime mapping for each managed agent. |
+| `/jb-odd-models <profile>` | Yes, unless already aligned | Yes, only after writes | Activate a registered profile. |
+| `/jb-odd-models undo` | Yes, if safe | Yes, after undo | Revert the last completed transaction when no intervening edits exist. |
+| `/jb-odd-models recover` | Sometimes | Yes, after changed recovery | Finish, record, or clear an interrupted transaction from recorded safe states. |
 
 A switch that is already semantically aligned leaves bytes and mtimes untouched and does not call reload, even if the files use different JSON formatting. Direct selection still aligns the current Pi session to the effective selected `orchestrator` model and thinking; when both files and session already match, it makes no model call or reload.
 
@@ -41,13 +41,13 @@ The optional `oppositeProviderJudges` manifest block controls mixed judge routin
 
 Version 1.3 packages GPT-5.5 Powerful, GPT-5.6, GPT Astra, GPT Astra-only, and Grok low-cost/recommended/powerful profiles from `config/named-profiles.json`, plus standalone `claude-opus-5.5` from `config/models.claude-opus-5.5.json`. The standalone `claude-sep` and `openai-sep` profiles are also registered. The default installed profile is `openaigentle`; `openai` and `grok` remain compatibility aliases for `gpt-5.6-recommended` and `grok-recommended`.
 
-Only paired profiles use opposite-provider judges. Selecting a paired GPT-family lane writes normal SDD/ODD agents from that profile and judge/reviewer agents from the matching Grok lane. Selecting a paired Grok lane writes normal agents from Grok and judges from the matching GPT-5.6 lane. Unpaired profiles, including `openaigentle`, `gpt-5.5-powerful`, and `claude-opus-5.5`, retain their own judge mappings. `gpt-5.5-powerful` uses GPT-5.5 for every managed agent, with medium orchestrator/lightweight, xhigh reasoning, and high code effort. `claude-opus-5.5` uses `claude-bridge/claude-opus-5-5` for every managed agent, with task-aware low effort for routine phases, medium for exploration, specification, implementation, and readability, and high for research, design, verification, and risk-focused review. It does not use `max`. Both `claude-sep` and `openai-sep` are unpaired: judges and reviewers retain their profile assignments. `claude-sep` inherits `claude-opus-5.5` except that `sdd-explore`, `gentle-ai-explore`, `sdd-apply`, `gentle-ai-worker`, and `jd-fix-agent` use `claude-bridge/claude-sonnet-5` at high effort, and `review-readability` overrides the inherited baseline to `claude-bridge/claude-opus-5-5` at high effort. `openai-sep` inherits `openaigentle` except that `sdd-apply`, `gentle-ai-worker`, and `jd-fix-agent` use `openai-codex/gpt-6-sol` at medium effort. Every registered profile assigns `jd-fix-agent` the same model and effort as its implementation worker.
+Only paired profiles use opposite-provider judges. Selecting a paired GPT-family lane writes normal ODD agents from that profile and judge/reviewer agents from the matching Grok lane. Selecting a paired Grok lane writes normal agents from Grok and judges from the matching GPT-5.6 lane. Unpaired profiles, including `openaigentle`, `gpt-5.5-powerful`, and `claude-opus-5.5`, retain their own judge mappings. `gpt-5.5-powerful` uses GPT-5.5 for every managed agent, with medium orchestrator, xhigh reasoning, and high code effort. `claude-opus-5.5` uses `claude-bridge/claude-opus-5-5` for every managed agent, with task-aware medium effort for orchestration, exploration, implementation, and readability, and high effort for verification and risk-focused review. It does not use `max`. Both `claude-sep` and `openai-sep` are unpaired: judges and reviewers retain their profile assignments. `claude-sep` inherits `claude-opus-5.5` except that `gentle-ai-explore`, `gentle-ai-worker`, and `jd-fix-agent` use `claude-bridge/claude-sonnet-5` at high effort, and `review-readability` overrides the inherited baseline to `claude-bridge/claude-opus-5-5` at high effort. `openai-sep` inherits `openaigentle` except that `gentle-ai-worker` and `jd-fix-agent` use `openai-codex/gpt-6-sol` at medium effort. Every registered profile assigns `jd-fix-agent` the same model and effort as its implementation worker.
 
 ## Managed effort mapping
 
 The runtime mapping uses `model_profiles[agent] = { model, effort }`. The canonical profile uses `{ model, thinking }`; switching copies `thinking` to runtime `effort`.
 
-Profiles accept any nonempty, already-trimmed effort string, including `max` and model-specific values. Values are preserved verbatim: the package does not trim, lowercase, whitelist, or downgrade them. The original `openaigentle` archive mapping remains `openai-codex/gpt-6-luna` with `thinking: max` and runtime `effort: max`.
+Profiles accept any nonempty, already-trimmed effort string, including `max` and model-specific values. Values are preserved verbatim: the package does not trim, lowercase, whitelist, or downgrade them.
 
 Profile acceptance is separate from capability diagnostics. `doctor` uses the installed Pi registry:
 
@@ -71,15 +71,17 @@ These are local capability checks, not provider requests or execution guarantees
 
 When switching, unrelated top-level keys and unrelated `model_profiles` entries are retained. Only managed agent entries are replaced or added.
 
+Switching also removes the 13 retired routes that the previous schema managed (`sdd-init`, `sdd-explore`, `sdd-research`, `sdd-proposal`, `sdd-spec`, `sdd-design`, `sdd-tasks`, `sdd-onboard`, `sdd-archive`, `sdd-apply`, `sdd-verify`, `sdd-status`, and `sdd-sync`) from both files, even when the selected profile is otherwise already active. Removal matches those exact names only; other custom entries, including similarly named ones, are kept. `undo` restores the recorded before-state, including any retired routes it contained.
+
 ## Validation and repair boundary
 
 Before status comparison or switching, each registered named profile must:
 
 - be a JSON object;
-- contain exactly the manifest's active managed SDD/ODD keys plus configured judge/reviewer keys; and
+- contain exactly the manifest's active managed ODD keys plus configured judge/reviewer keys; and
 - give every key a `model` in `provider/model` form and a nonempty, already-trimmed `thinking` string.
 
-The active runtime file must have an object-valued `model_profiles` property. Existing managed entries in the active canonical/runtime files are validated before a switch. Missing managed entries from older installs, such as newly added `sdd-research`, are repairable during a switch and are added from the selected profile. Malformed existing entries are not repaired silently; the switch stops before writing.
+The active runtime file must have an object-valued `model_profiles` property. Existing managed entries in the active canonical/runtime files are validated before a switch. Missing managed entries from older installs are repairable during a switch and are added from the selected profile. Malformed existing entries are not repaired silently; the switch stops before writing.
 
 Unrelated runtime mappings are intentionally preserved and reported by `doctor`; they are not false errors.
 

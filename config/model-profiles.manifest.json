@@ -1,22 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "defaultProfile": "openaigentle",
   "managedAgentGroups": {
-    "sdd": [
-      "sdd-init",
-      "sdd-explore",
-      "sdd-research",
-      "sdd-proposal",
-      "sdd-spec",
-      "sdd-design",
-      "sdd-tasks",
-      "sdd-onboard",
-      "sdd-archive",
-      "sdd-apply",
-      "sdd-verify",
-      "sdd-status",
-      "sdd-sync"
-    ],
     "odd": [
       "gentle-ai-explore",
       "gentle-ai-worker",

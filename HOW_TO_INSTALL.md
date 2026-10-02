@@ -1,6 +1,6 @@
-# Install and recover `/jb-sdd-odd-models`
+# Install and recover `/jb-odd-models`
 
-Run the included installer from this package. It validates package data, backs up existing files that will change, installs the command plus helper layout, and merges only the managed SDD/ODD runtime mappings.
+Run the included installer from this package. It validates package data, backs up existing files that will change, installs the command plus helper layout, and merges only the managed ODD runtime mappings.
 
 ## Prerequisites
 
@@ -14,17 +14,17 @@ The installer does not install Pi, models, credentials, provider authentication,
 ## Install
 
 ```sh
-cd /path/to/pi-sdd-model-switch
+cd /path/to/pissdmodelswitch
 ./install/install.sh
 ```
 
 The installer writes:
 
-- `~/.pi/agent/extensions/sdd-model-profiles.ts`
+- `~/.pi/agent/extensions/odd-model-profiles.ts`
 - helper modules under `~/.pi/agent/extensions/model-profiles/`
 - `~/.pi/gentle-ai/model-profiles.manifest.json`
 - every profile registered by that manifest, including `openaigentle`, GPT-5.6, GPT Astra, GPT Astra-only, Grok lanes, and legacy alias files such as `models.openai.json` and `models.grok.json`
-- derived active `~/.pi/gentle-ai/models.json` from the manifest default profile, including opposite-provider judge entries when configured
+- derived active `~/.pi/gentle-ai/models.json` from the currently active registered profile, or the manifest default on a fresh install, including opposite-provider judge entries when configured
 - the merged managed entries in `~/.pi/agent/subagents.json`, using the same effective profile
 
 Existing unrelated canonical keys, unrelated top-level runtime keys, and unrelated `model_profiles` entries in `subagents.json` are preserved. Re-running the installer is safe: identical files are left unchanged and no backup is created. With the packaged manifest, the default profile is `openaigentle`, using GPT-6 Sol/Luna. Unpaired profiles such as `openaigentle` retain their own judge mappings; configured pairs use opposite-provider judges unless `oppositeProviderJudges` is disabled or has no agents.
@@ -45,25 +45,39 @@ The target must already contain `agent/`; this prevents accidentally installing 
 When an existing target changes, the installer creates a timestamped directory under:
 
 ```text
-$PI_HOME/backups/jb-sdd-odd-models-<timestamp>-<pid>/
+$PI_HOME/backups/jb-odd-models-<timestamp>-<pid>/
 ```
 
 Backups retain paths relative to `PI_HOME`. Newly created files have no prior copy and therefore do not appear in the backup. A reinstall that would produce identical bytes changes nothing and creates no backup.
 
-If an active transaction journal or lock exists, the installer fails closed before writing. Run `/jb-sdd-odd-models doctor` to inspect the state and `/jb-sdd-odd-models recover` only when it is safe to complete recovery.
+## Upgrade from the previous command
+
+Version 2 of the manifest manages only ODD, orchestrator, and review/judge agents. The command is now `/jb-odd-models`; the previous `/jb-sdd-odd-models` command is not kept as an alias. Run the installer once from this package to upgrade:
+
+| Existing state | Installer action |
+|---|---|
+| `agent/extensions/sdd-model-profiles.ts` matches a released copy of this package byte for byte | Moves it into the backup directory so Pi no longer loads the old command. |
+| That file exists but differs from every released copy, or is not a regular file | Stops before writing anything. Review the file, move it out of `agent/extensions/` yourself, then rerun the installer. |
+| `models.json` or `subagents.json` contain the 13 retired `sdd-*` routes | Removes exactly those keys. Other custom keys, including similarly named ones, are kept. |
+| Active mappings match a registered profile | Keeps that profile active. |
+| Active mappings match no registered profile | Activates the default profile and reports this; the previous files are in the backup. |
+
+The shared helper directory `agent/extensions/model-profiles/` stays in place and is updated for the new command.
+
+If an active transaction journal or lock exists, the installer fails closed before writing. Run `/jb-odd-models doctor` to inspect the state and `/jb-odd-models recover` only when it is safe to complete recovery.
 
 ## Verify
 
 1. Restart Pi so it loads the installed extension.
-2. Run `/jb-sdd-odd-models status`.
-3. Run `/jb-sdd-odd-models doctor`.
+2. Run `/jb-odd-models status`.
+3. Run `/jb-odd-models doctor`.
 4. Confirm that all managed mappings are listed and the active profile is `openaigentle`, another registered profile, or intentionally `custom`.
 5. Optionally switch and verify:
 
    ```text
-   /jb-sdd-odd-models grok-recommended
-   /jb-sdd-odd-models status
-   /jb-sdd-odd-models doctor
+   /jb-odd-models grok-recommended
+   /jb-odd-models status
+   /jb-odd-models doctor
    ```
 
 If Pi does not recognize the command, verify that Gentle Pi loads TypeScript extensions from `$PI_HOME/agent/extensions`, that `extensions/model-profiles/` was copied next to the command extension, and that the same `PI_HOME` is used at install time and runtime.
@@ -75,18 +89,18 @@ The manifest is the source of truth. To add a profile such as `local`, add it to
 After reinstalling, verify:
 
 ```text
-/jb-sdd-odd-models list
-/jb-sdd-odd-models preview local
-/jb-sdd-odd-models doctor
+/jb-odd-models list
+/jb-odd-models preview local
+/jb-odd-models doctor
 ```
 
 ## Recover or undo runtime state
 
 Use these commands from Pi after installation:
 
-- `/jb-sdd-odd-models undo` reverts the last completed transaction only if neither target file has changed since that transaction completed.
-- `/jb-sdd-odd-models recover` handles an interrupted transaction when current bytes match recorded safe states.
-- `/jb-sdd-odd-models doctor` reports stale locks, malformed journals, and preserved unrelated mappings without writing.
+- `/jb-odd-models undo` reverts the last completed transaction only if neither target file has changed since that transaction completed.
+- `/jb-odd-models recover` handles an interrupted transaction when current bytes match recorded safe states.
+- `/jb-odd-models doctor` reports stale locks, malformed journals, and preserved unrelated mappings without writing.
 
 Recovery is intentionally conservative. If a noncooperating writer changed either file outside the transaction, recovery refuses unknown bytes instead of overwriting them.
 

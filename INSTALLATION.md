@@ -1,4 +1,4 @@
-# Install `/jb-sdd-odd-models`
+# Install `/jb-odd-models`
 
 This guide shows the shortest safe path to install the model-profile switch plugin into Pi.
 
@@ -14,8 +14,8 @@ cd /path/to/pissdmodelswitch
 Then restart Pi and verify the command is loaded:
 
 ```text
-/jb-sdd-odd-models status
-/jb-sdd-odd-models doctor
+/jb-odd-models status
+/jb-odd-models doctor
 ```
 
 ## Requirements
@@ -33,14 +33,14 @@ The installer copies the command and profile data into Pi home:
 
 | Target | Purpose |
 |---|---|
-| `$PI_HOME/agent/extensions/sdd-model-profiles.ts` | Slash command extension |
+| `$PI_HOME/agent/extensions/odd-model-profiles.ts` | Slash command extension |
 | `$PI_HOME/agent/extensions/model-profiles/` | Helper modules |
 | `$PI_HOME/gentle-ai/model-profiles.manifest.json` | Profile manifest |
 | `$PI_HOME/gentle-ai/models.<profile>.json` | Every registered named profile, including `openaigentle`, GPT-5.6, GPT Astra, GPT Astra-only, Grok lanes, and legacy aliases |
 | `$PI_HOME/gentle-ai/models.json` | Derived active canonical profile |
 | `$PI_HOME/agent/subagents.json` | Merged runtime `model_profiles` entries |
 
-Unrelated JSON keys and unrelated `model_profiles` entries are preserved.
+Unrelated JSON keys and unrelated `model_profiles` entries are preserved. Upgrading from `/jb-sdd-odd-models` retires its released extension file into the backup and removes its 13 retired routes; see [Upgrade from the previous command](HOW_TO_INSTALL.md#upgrade-from-the-previous-command).
 
 ## Custom `PI_HOME`
 
@@ -58,7 +58,7 @@ The target must already contain an `agent/` directory.
 When an existing target file changes, the installer creates a backup under:
 
 ```text
-$PI_HOME/backups/jb-sdd-odd-models-<timestamp>-<pid>/
+$PI_HOME/backups/jb-odd-models-<timestamp>-<pid>/
 ```
 
 Re-running the installer with identical generated files is a no-op and does not create a new backup.
@@ -68,13 +68,13 @@ Re-running the installer with identical generated files is a no-op and does not 
 Run:
 
 ```text
-/jb-sdd-odd-models status
-/jb-sdd-odd-models doctor
+/jb-odd-models status
+/jb-odd-models doctor
 ```
 
 Expected result:
 
-- Pi recognizes `/jb-sdd-odd-models`.
+- Pi recognizes `/jb-odd-models`.
 - `status` shows `openaigentle` by default, another registered profile, or intentionally `custom`.
 - `doctor` reports healthy managed mappings or actionable diagnostics.
 
@@ -83,14 +83,14 @@ Expected result:
 If the installer refuses to write because a transaction or lock exists, restart Pi and inspect:
 
 ```text
-/jb-sdd-odd-models doctor
+/jb-odd-models doctor
 ```
 
 Recover only when the diagnostic says recovery is safe:
 
 ```text
-/jb-sdd-odd-models recover
-/jb-sdd-odd-models doctor
+/jb-odd-models recover
+/jb-odd-models doctor
 ```
 
 ## Related docs

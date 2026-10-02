@@ -1,35 +1,35 @@
-# Use `/jb-sdd-odd-models`
+# Use `/jb-odd-models`
 
-The command reports, previews, diagnoses, switches, undoes, or recovers the global model profile used by the managed SDD phase agents, ODD generic agents, and configured judge/reviewer agents. Registered profile names and optional opposite-provider judge routing come from `model-profiles.manifest.json` instead of being hard-coded.
+The command reports, previews, diagnoses, switches, undoes, or recovers the global model profile used by the managed orchestrator, ODD generic agents, and configured judge/reviewer agents. Registered profile names and optional opposite-provider judge routing come from `model-profiles.manifest.json` instead of being hard-coded.
 
 ## Command reference
 
 | Input | Effect |
 |---|---|
-| `/jb-sdd-odd-models` | Shows usage, active-state detection, and all managed mappings. Read-only. |
-| `/jb-sdd-odd-models status` | Shows active-state detection and all managed mappings. Read-only. |
-| `/jb-sdd-odd-models doctor` | Performs read-only diagnostics for manifest/profile shape, active canonical/runtime state, transaction journals/locks, local Pi catalog presence, effort compatibility, and auth configuration evidence. |
-| `/jb-sdd-odd-models list` | Lists registered profiles and the default profile. Read-only. |
-| `/jb-sdd-odd-models preview <profile>` | Shows managed canonical/runtime before → after mappings for a profile. Read-only. |
-| `/jb-sdd-odd-models <profile>` | Validates registered profiles and current files, aligns this Pi session with the effective `orchestrator` model and standard thinking level, writes changed canonical/runtime mappings, then reloads Pi only if files changed. No-op when session and files already match. |
-| `/jb-sdd-odd-models undo` | Reverts the last completed profile transaction only if both files still match the recorded transaction output, then reloads Pi. |
-| `/jb-sdd-odd-models recover` | Finishes, records, or clears an interrupted profile transaction when the current file bytes match a safe recorded state, then reloads Pi when recovery changed state. |
-| `/jb-sdd-odd-models <invalid>` | Displays an unknown-argument warning and usage. Read-only. |
+| `/jb-odd-models` | Shows usage, active-state detection, and all managed mappings. Read-only. |
+| `/jb-odd-models status` | Shows active-state detection and all managed mappings. Read-only. |
+| `/jb-odd-models doctor` | Performs read-only diagnostics for manifest/profile shape, active canonical/runtime state, transaction journals/locks, local Pi catalog presence, effort compatibility, and auth configuration evidence. |
+| `/jb-odd-models list` | Lists registered profiles and the default profile. Read-only. |
+| `/jb-odd-models preview <profile>` | Shows managed canonical/runtime before → after mappings for a profile. Read-only. |
+| `/jb-odd-models <profile>` | Validates registered profiles and current files, aligns this Pi session with the effective `orchestrator` model and standard thinking level, writes changed canonical/runtime mappings, then reloads Pi only if files changed. No-op when session and files already match. |
+| `/jb-odd-models undo` | Reverts the last completed profile transaction only if both files still match the recorded transaction output, then reloads Pi. |
+| `/jb-odd-models recover` | Finishes, records, or clears an interrupted profile transaction when the current file bytes match a safe recorded state, then reloads Pi when recovery changed state. |
+| `/jb-odd-models <invalid>` | Displays an unknown-argument warning and usage. Read-only. |
 
-Arguments are trimmed and case-insensitive. Dots and hyphens are supported in registered path-safe profile names, so `/jb-sdd-odd-models GPT-5.6-RECOMMENDED` selects `gpt-5.6-recommended`.
+Arguments are trimmed and case-insensitive. Dots and hyphens are supported in registered path-safe profile names, so `/jb-odd-models GPT-5.6-RECOMMENDED` selects `gpt-5.6-recommended`.
 
 ## Common checks
 
 ### Inspect without changing anything
 
 ```text
-/jb-sdd-odd-models status
+/jb-odd-models status
 ```
 
 Expected heading:
 
 ```text
-Active SDD/ODD profile: openaigentle
+Active ODD profile: openaigentle
 ```
 
 The state can also be any registered profile name, `custom`, or `unknown`. `[misaligned]` means the canonical entry and live runtime entry differ for that agent. With the packaged `oppositeProviderJudges` block, only paired profiles use opposite-provider judges: paired GPT-family profiles use the matching Grok cost lane, paired Grok profiles use the matching GPT-5.6 lane, and legacy `openai`/`grok` aliases retain their previous pairing. Unpaired profiles, including the default `openaigentle`, retain their own judge mappings.
@@ -37,7 +37,7 @@ The state can also be any registered profile name, `custom`, or `unknown`. `[mis
 ### Diagnose local configuration
 
 ```text
-/jb-sdd-odd-models doctor
+/jb-odd-models doctor
 ```
 
 `doctor` never writes, repairs, reclaims locks, or reloads Pi. It distinguishes:
@@ -48,6 +48,7 @@ The state can also be any registered profile name, `custom`, or `unknown`. `[mis
 - malformed active/history transaction journals;
 - stale or ambiguous transaction locks;
 - unrelated runtime mappings that are preserved;
+- retired mappings from the previous command, which the next switch or install removes;
 - local effective Pi catalog entries found or missing through `ctx.modelRegistry.find()`;
 - effort compatibility using model `reasoning` and `thinkingLevelMap` evidence; and
 - configured-auth evidence through Pi's registry auth status.
@@ -61,8 +62,8 @@ Installed/global profile status does not prove effective project routing: projec
 ### List and preview profiles
 
 ```text
-/jb-sdd-odd-models list
-/jb-sdd-odd-models preview openaigentle
+/jb-odd-models list
+/jb-odd-models preview openaigentle
 ```
 
 The preview shows each managed agent's current canonical entry and runtime entry next to the selected profile's effective after state, including opposite-provider judge mappings when configured for a paired profile. Missing legacy entries can be repaired by a switch. Malformed existing managed entries stop the switch before any write.
@@ -70,10 +71,10 @@ The preview shows each managed agent's current canonical entry and runtime entry
 ### Select a profile
 
 ```text
-/jb-sdd-odd-models openaigentle
+/jb-odd-models openaigentle
 ```
 
-On success, the selected SDD/ODD mappings are written and Pi reloads only for changed files. The canonical profile uses `thinking`; the runtime mapping receives the same value as `effort`. Already-active files stay untouched, but direct selection still aligns the current session. Missing model/auth, unavailable rollback model, unsupported orchestrator thinking, and clamped thinking fail before file mutation. A later file-switch failure attempts session restoration and reports restoration errors.
+On success, the selected ODD mappings are written and Pi reloads only for changed files. The canonical profile uses `thinking`; the runtime mapping receives the same value as `effort`. Already-active files stay untouched, but direct selection still aligns the current session. Missing model/auth, unavailable rollback model, unsupported orchestrator thinking, and clamped thinking fail before file mutation. A later file-switch failure attempts session restoration and reports restoration errors.
 
 ## Add a registered profile
 
@@ -83,7 +84,7 @@ To add a third profile such as `local`, keep the same active managed-agent cover
 2. Create `models.local.json` with exactly every agent listed under the manifest's `managedAgentGroups` plus the configured `oppositeProviderJudges.agents` when that block is enabled.
 3. Use `{ "model": "provider/model", "thinking": "max" }` for each agent, choosing an effort appropriate for that model. The package accepts any nonempty, already-trimmed effort string and copies it verbatim; it does not trim, lowercase, whitelist, or downgrade values. Direct switching rejects nonstandard `orchestrator` thinking before mutation; other agents' efforts remain unrestricted and the installed runtime or provider may reject unsupported levels even after a successful switch.
 4. Restart or reinstall so the installed manifest/profile files are copied into Pi home.
-5. Run `/jb-sdd-odd-models list`, `/jb-sdd-odd-models preview local`, and `/jb-sdd-odd-models doctor`.
+5. Run `/jb-odd-models list`, `/jb-odd-models preview local`, and `/jb-odd-models doctor`.
 
 Profile names must be safe lowercase command names: start with a lowercase letter, use lowercase letters/digits separated by single `-` or `.` segments, and cannot use reserved command names such as `status`, `list`, `preview`, `doctor`, `undo`, or `recover`.
 
@@ -93,4 +94,4 @@ Argument completion is synchronous and manifest-backed. It offers `status`, `lis
 
 ## Installed extension files
 
-The installed extension imports helper modules from `extensions/model-profiles/`. Package or manual installs must include that directory next to `extensions/sdd-model-profiles.ts`; the helper modules are not standalone auto-loaded extensions.
+The installed extension imports helper modules from `extensions/model-profiles/`. Package or manual installs must include that directory next to `extensions/odd-model-profiles.ts`; the helper modules are not standalone auto-loaded extensions.

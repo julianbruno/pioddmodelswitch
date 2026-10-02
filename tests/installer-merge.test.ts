@@ -1,13 +1,21 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { access, chmod, copyFile, mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, mkdir, readFile, readdir, realpath, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 
-import { deriveCanonicalProfileForSelection, deriveRuntimeModelProfilesForSelection, validateManifest, validateProfileSet } from "../extensions/model-profiles/core.ts";
+import {
+  RETIRED_MANAGED_AGENTS,
+  deriveCanonicalProfileForSelection,
+  deriveRuntimeConfigForSelection,
+  deriveRuntimeModelProfilesForSelection,
+  validateManifest,
+  validateProfileSet,
+} from "../extensions/model-profiles/core.ts";
 import { installModelProfiles } from "../install/model-profiles-install.ts";
 
 const execFileAsync = promisify(execFile);
@@ -63,7 +71,7 @@ async function copyPackageFixture(): Promise<string> {
   for (const profile of manifest.profiles) {
     await copyFile(join("config", profile.modelsFile), join(root, "config", profile.modelsFile));
   }
-  await copyFile("extensions/sdd-model-profiles.ts", join(root, "extensions", "sdd-model-profiles.ts"));
+  await copyFile("extensions/odd-model-profiles.ts", join(root, "extensions", "odd-model-profiles.ts"));
   await copyTree("extensions/model-profiles", join(root, "extensions", "model-profiles"));
   await copyFile("install/install.sh", join(root, "install", "install.sh"));
   await copyFile("install/model-profiles-install.ts", join(root, "install", "model-profiles-install.ts"));
@@ -102,10 +110,10 @@ exec ${JSON.stringify(process.execPath)} "$@"
 
 test("packaged duplicate active and seed files are eliminated after equivalence proof", async () => {
   const { manifest, profiles } = await expectedDefaultFrom();
-  assert.deepEqual(deriveCanonicalProfileForSelection(manifest.defaultProfile, profiles, manifest)["sdd-research"], profiles[manifest.defaultProfile]["sdd-research"]);
-  assert.deepEqual(deriveRuntimeModelProfilesForSelection(manifest.defaultProfile, profiles, manifest)["sdd-research"], {
-    model: profiles[manifest.defaultProfile]["sdd-research"].model,
-    effort: profiles[manifest.defaultProfile]["sdd-research"].thinking,
+  assert.deepEqual(deriveCanonicalProfileForSelection(manifest.defaultProfile, profiles, manifest)["gentle-ai-verify"], profiles[manifest.defaultProfile]["gentle-ai-verify"]);
+  assert.deepEqual(deriveRuntimeModelProfilesForSelection(manifest.defaultProfile, profiles, manifest)["gentle-ai-verify"], {
+    model: profiles[manifest.defaultProfile]["gentle-ai-verify"].model,
+    effort: profiles[manifest.defaultProfile]["gentle-ai-verify"].thinking,
   });
   assert.equal(await exists("config/models.json"), false);
   assert.equal(await exists("config/subagents.seed.json"), false);
@@ -122,16 +130,16 @@ test("malformed manifest or registered profile fails before any target mutation"
   const beforeRuntime = await readFile(runtimePath, "utf8");
 
   await writeJson(join(packageRoot, "config", "model-profiles.manifest.json"), { schemaVersion: 999 });
-  await assert.rejects(runInstall(packageRoot, piHome), /schemaVersion must be 1/);
+  await assert.rejects(runInstall(packageRoot, piHome), /schemaVersion must be 2/);
   assert.equal(await readFile(canonicalPath, "utf8"), beforeCanonical);
   assert.equal(await readFile(runtimePath, "utf8"), beforeRuntime);
   assert.equal(await exists(join(piHome, "backups")), false);
 
   await copyFile("config/model-profiles.manifest.json", join(packageRoot, "config", "model-profiles.manifest.json"));
   const openai = await readJson(join(packageRoot, "config", "models.openai.json"));
-  delete openai["sdd-research"];
+  delete openai["gentle-ai-verify"];
   await writeJson(join(packageRoot, "config", "models.openai.json"), openai);
-  await assert.rejects(runInstall(packageRoot, piHome), /missing: sdd-research/);
+  await assert.rejects(runInstall(packageRoot, piHome), /missing: gentle-ai-verify/);
   assert.equal(await readFile(canonicalPath, "utf8"), beforeCanonical);
   assert.equal(await readFile(runtimePath, "utf8"), beforeRuntime);
 });
@@ -148,36 +156,41 @@ test("fresh temp install copies manifest, registered profiles, extension helpers
   }
   assert.deepEqual(await readJson(join(piHome, "gentle-ai", "models.json")), deriveCanonicalProfileForSelection(manifest.defaultProfile, profiles, manifest));
   assert.deepEqual((await readJson(join(piHome, "agent", "subagents.json"))).model_profiles, deriveRuntimeModelProfilesForSelection(manifest.defaultProfile, profiles, manifest));
-  // Literal assertions protect the original archive mapping independently of derivation helpers.
-  assert.deepEqual((await readJson(join(piHome, "gentle-ai", "models.json")))["sdd-archive"], {
-    model: "openai-codex/gpt-6-luna", thinking: "max",
+  // Literal assertions protect the original exploration mapping independently of derivation helpers.
+  assert.deepEqual((await readJson(join(piHome, "gentle-ai", "models.json")))["gentle-ai-explore"], {
+    model: "openai-codex/gpt-6-luna", thinking: "high",
   });
-  assert.deepEqual((await readJson(join(piHome, "agent", "subagents.json"))).model_profiles["sdd-archive"], {
-    model: "openai-codex/gpt-6-luna", effort: "max",
+  assert.deepEqual((await readJson(join(piHome, "agent", "subagents.json"))).model_profiles["gentle-ai-explore"], {
+    model: "openai-codex/gpt-6-luna", effort: "high",
   });
   const expectedReviewProfileName = manifest.oppositeProviderJudges.profilePairs[manifest.defaultProfile] ?? manifest.defaultProfile;
   assert.deepEqual(
     (await readJson(join(piHome, "gentle-ai", "models.json")))["review-risk"],
     profiles[expectedReviewProfileName]["review-risk"],
   );
-  assert.equal(await exists(join(piHome, "agent", "extensions", "sdd-model-profiles.ts")), true);
+  assert.equal(await exists(join(piHome, "agent", "extensions", "odd-model-profiles.ts")), true);
+  assert.equal(await exists(join(piHome, "agent", "extensions", "sdd-model-profiles.ts")), false);
+  assert.deepEqual(result.retiredFiles, []);
+  assert.equal(result.activeProfile, manifest.defaultProfile);
   assert.equal(await exists(join(piHome, "agent", "extensions", "model-profiles", "core.ts")), true);
   assert.equal(await exists(join(piHome, "agent", "extensions", "model-profiles", "transaction.ts")), true);
   assert.equal(await exists(join(piHome, "agent", "extensions", "core.ts")), false);
   assert.equal(await exists(join(piHome, "backups")), false);
 });
 
-test("legacy migration preserves unrelated runtime and canonical data, creates backups, and repeat install is byte no-op", async () => {
+test("legacy migration removes exactly the retired routes, preserves unrelated data, creates backups, and repeat install is byte no-op", async () => {
   const piHome = await preparePiHome("installer-legacy");
   const canonicalPath = join(piHome, "gentle-ai", "models.json");
   const runtimePath = join(piHome, "agent", "subagents.json");
   await writeJson(canonicalPath, {
-    "sdd-init": { model: "legacy/init", thinking: "low" },
+    ...Object.fromEntries(RETIRED_MANAGED_AGENTS.map((agent) => [agent, { model: "legacy/route", thinking: "low" }])),
+    "sdd-custom": { model: "keep/custom", thinking: "low" },
     customCanonical: { model: "keep/canonical", thinking: "medium" },
   });
   await writeJson(runtimePath, {
     model_profiles: {
-      "sdd-init": { model: "legacy/init", effort: "low" },
+      ...Object.fromEntries(RETIRED_MANAGED_AGENTS.map((agent) => [agent, { model: "legacy/route", effort: "low" }])),
+      "sdd-custom": { model: "keep/custom", effort: "low" },
       unrelatedAgent: { model: "keep/runtime", effort: "low" },
     },
     unrelatedTopLevel: { keep: true },
@@ -197,8 +210,14 @@ test("legacy migration preserves unrelated runtime and canonical data, creates b
   assert.deepEqual(canonical.customCanonical, { model: "keep/canonical", thinking: "medium" });
   assert.deepEqual(runtime.unrelatedTopLevel, { keep: true });
   assert.deepEqual(runtime.model_profiles.unrelatedAgent, { model: "keep/runtime", effort: "low" });
-  assert.ok(canonical["sdd-research"]);
-  assert.ok(runtime.model_profiles["sdd-research"]);
+  assert.deepEqual(canonical["sdd-custom"], { model: "keep/custom", thinking: "low" });
+  assert.deepEqual(runtime.model_profiles["sdd-custom"], { model: "keep/custom", effort: "low" });
+  for (const agent of RETIRED_MANAGED_AGENTS) {
+    assert.equal(Object.hasOwn(canonical, agent), false, agent);
+    assert.equal(Object.hasOwn(runtime.model_profiles, agent), false, agent);
+  }
+  assert.ok(canonical["gentle-ai-verify"]);
+  assert.ok(runtime.model_profiles["gentle-ai-verify"]);
 
   const afterCanonical = await readFile(canonicalPath, "utf8");
   const afterRuntime = await readFile(runtimePath, "utf8");
@@ -227,7 +246,7 @@ test("dynamic third profile installs and the installed command can status and sw
   await runInstall(packageRoot, piHome);
   assert.deepEqual(await readJson(join(piHome, "gentle-ai", "models.local.json")), localProfile);
 
-  const imported = await import(`${join(piHome, "agent", "extensions", "sdd-model-profiles.ts")}?${Date.now()}`);
+  const imported = await import(`${join(piHome, "agent", "extensions", "odd-model-profiles.ts")}?${Date.now()}`);
   const commands = new Map<string, any>();
   const installedDefault = (await readJson(join(piHome, "gentle-ai", "models.json"))).orchestrator;
   const [defaultProvider, defaultId] = installedDefault.model.split("/");
@@ -251,7 +270,8 @@ test("dynamic third profile installs and the installed command can status and sw
     getThinkingLevel: () => thinkingLevel,
     setThinkingLevel: (level: string) => { thinkingLevel = level; },
   }, { piHome });
-  const command = commands.get("jb-sdd-odd-models");
+  assert.deepEqual([...commands.keys()], ["jb-odd-models"]);
+  const command = commands.get("jb-odd-models");
   assert.ok(command);
   const notifications: Array<{ message: string; level: string }> = [];
   let reloads = 0;
@@ -266,15 +286,15 @@ test("dynamic third profile installs and the installed command can status and sw
   };
 
   await command.handler("status", ctx);
-  assert.match(notifications.at(-1)?.message ?? "", new RegExp(`Active SDD/ODD profile: ${manifest.defaultProfile}`));
+  assert.match(notifications.at(-1)?.message ?? "", new RegExp(`Active ODD profile: ${manifest.defaultProfile}`));
   await command.handler("local", ctx);
   assert.equal(reloads, 1);
   assert.deepEqual(sessionModel, { provider: localProvider, id: localId });
   assert.deepEqual(modelChanges, [localOrchestrator.model]);
   assert.equal(thinkingLevel, localOrchestrator.thinking);
   assert.match(notifications.at(-1)?.message ?? "", /local profile activated/);
-  assert.deepEqual((await readJson(join(piHome, "gentle-ai", "models.json")))["sdd-research"], { model: "local/sdd-research", thinking: "medium" });
-  assert.deepEqual((await readJson(join(piHome, "agent", "subagents.json"))).model_profiles["sdd-research"], { model: "local/sdd-research", effort: "medium" });
+  assert.deepEqual((await readJson(join(piHome, "gentle-ai", "models.json")))["gentle-ai-verify"], { model: "local/gentle-ai-verify", thinking: "medium" });
+  assert.deepEqual((await readJson(join(piHome, "agent", "subagents.json"))).model_profiles["gentle-ai-verify"], { model: "local/gentle-ai-verify", effort: "medium" });
 });
 
 test("installer fails closed when active transaction or same-target lock is present", async () => {
@@ -327,4 +347,78 @@ test("install shell accepts Node 22.19.0 and newer supported versions", async ()
   const piHomeNewer = await preparePiHome("installer-node-newer");
   await runShellInstallWithFakeNode("26.8.2", packageRootNewer, piHomeNewer);
   assert.equal(await exists(join(piHomeNewer, "gentle-ai", "models.json")), true);
+});
+
+// Released predecessor bytes (ce683b6:extensions/sdd-model-profiles.ts), vendored as an inert .txt so
+// the suite runs without git history; the installer may retire only exact released copies.
+const RELEASED_LEGACY_FIXTURE = new URL("./fixtures/legacy-model-profiles.txt", import.meta.url);
+const RELEASED_LEGACY_SHA256 = "31993351ba029c0dacb83c204e0de6480bc75b8dacafa6a10a1746b818a405a4";
+
+async function releasedLegacyExtension(): Promise<string> {
+  const bytes = await readFile(RELEASED_LEGACY_FIXTURE);
+  assert.equal(createHash("sha256").update(bytes).digest("hex"), RELEASED_LEGACY_SHA256, "legacy fixture bytes drifted from the released extension");
+  return bytes.toString("utf8");
+}
+
+test("reinstall keeps a registered non-default active profile while removing retired routes", async () => {
+  const piHome = await preparePiHome("installer-active-profile");
+  const { manifest, profiles } = await expectedDefaultFrom();
+  const active = "grok-powerful";
+  assert.notEqual(active, manifest.defaultProfile);
+  const retired = Object.fromEntries(RETIRED_MANAGED_AGENTS.map((agent) => [agent, { model: "legacy/route", thinking: "low" }]));
+  await writeJson(join(piHome, "gentle-ai", "models.json"), { ...retired, ...deriveCanonicalProfileForSelection(active, profiles, manifest) });
+  await writeJson(join(piHome, "agent", "subagents.json"), deriveRuntimeConfigForSelection(active, profiles, manifest));
+
+  const result = await runInstall(".", piHome);
+  assert.equal(result.activeProfile, active);
+  assert.deepEqual(await readJson(join(piHome, "gentle-ai", "models.json")), deriveCanonicalProfileForSelection(active, profiles, manifest));
+  assert.deepEqual((await readJson(join(piHome, "agent", "subagents.json"))).model_profiles, deriveRuntimeModelProfilesForSelection(active, profiles, manifest));
+
+  const custom = { ...deriveCanonicalProfileForSelection(active, profiles, manifest), orchestrator: { model: "custom/orchestrator", thinking: "low" } };
+  await writeJson(join(piHome, "gentle-ai", "models.json"), custom);
+  const fallback = await runInstall(".", piHome);
+  assert.equal(fallback.activeProfile, manifest.defaultProfile);
+  assert.deepEqual(await readJson(join(fallback.backupRoot!, "gentle-ai", "models.json")), custom);
+});
+
+test("installer moves a released predecessor extension into the backup and installs only the renamed entrypoint", async () => {
+  const piHome = await preparePiHome("installer-retire-legacy");
+  const legacyPath = join(piHome, "agent", "extensions", "sdd-model-profiles.ts");
+  const legacy = await releasedLegacyExtension();
+  await mkdir(dirname(legacyPath), { recursive: true });
+  await writeFile(legacyPath, legacy, "utf8");
+
+  const result = await runInstall(".", piHome);
+  assert.deepEqual(result.retiredFiles, [legacyPath]);
+  assert.equal(await exists(legacyPath), false);
+  assert.ok(result.backupRoot);
+  assert.equal(await readFile(join(result.backupRoot!, "agent", "extensions", "sdd-model-profiles.ts"), "utf8"), legacy);
+  assert.match(await readFile(join(result.backupRoot!, "RESTORE.txt"), "utf8"), /agent\/extensions\/sdd-model-profiles\.ts is the retired predecessor extension/);
+  assert.equal(await readFile(join(piHome, "agent", "extensions", "odd-model-profiles.ts"), "utf8"), await readFile("extensions/odd-model-profiles.ts", "utf8"));
+
+  const repeat = await runInstall(".", piHome);
+  assert.equal(repeat.changed, false);
+  assert.deepEqual(repeat.retiredFiles, []);
+});
+
+test("installer refuses an unreleased or non-regular predecessor extension before any write", async () => {
+  for (const kind of ["modified", "symlink"]) {
+    const piHome = await preparePiHome(`installer-unowned-${kind}`);
+    const legacyPath = join(piHome, "agent", "extensions", "sdd-model-profiles.ts");
+    await mkdir(dirname(legacyPath), { recursive: true });
+    if (kind === "modified") {
+      await writeFile(legacyPath, `${await releasedLegacyExtension()}// local edit\n`, "utf8");
+    } else {
+      const target = join(piHome, "elsewhere.ts");
+      await writeFile(target, await releasedLegacyExtension(), "utf8");
+      await symlink(target, legacyPath);
+    }
+    const before = await readFile(legacyPath, "utf8");
+
+    await assert.rejects(runInstall(".", piHome), kind === "modified" ? /ownership is uncertain/ : /not a regular file/);
+    assert.equal(await readFile(legacyPath, "utf8"), before, kind);
+    assert.equal(await exists(join(piHome, "gentle-ai")), false, kind);
+    assert.equal(await exists(join(piHome, "backups")), false, kind);
+    assert.equal(await exists(join(piHome, "agent", "extensions", "odd-model-profiles.ts")), false, kind);
+  }
 });

@@ -43,10 +43,10 @@ The existing paired profiles route judges by provider and cost lane. `gpt-5.5-po
 
 | Profile | Use when |
 |---|---|
-| `gpt-5.5-powerful` | You want GPT-5.5 for every managed agent, including reviewers and judges, with medium orchestrator/lightweight, xhigh reasoning, and high code effort. |
-| `claude-opus-5.5` | You want `claude-bridge/claude-opus-5-5` for every managed agent, with task-aware low effort for routine phases, medium for exploration, specification, implementation, and readability, and high for research, design, verification, and risk-focused review. |
+| `gpt-5.5-powerful` | You want GPT-5.5 for every managed agent, including reviewers and judges, with medium orchestrator, xhigh reasoning, and high code effort. |
+| `claude-opus-5.5` | You want `claude-bridge/claude-opus-5-5` for every managed agent, with task-aware medium effort for orchestration, exploration, implementation, and readability, and high effort for verification and risk-focused review. |
 | `gpt-5.6-low-cost` | You want the cheapest OpenAI-family profile for routine exploration, small fixes, docs, or low-risk maintenance. |
-| `gpt-5.6-recommended` | You want the default balanced OpenAI profile for normal ODD/SDD work. Start here unless cost or difficulty says otherwise. |
+| `gpt-5.6-recommended` | You want the default balanced OpenAI profile for normal ODD work. Start here unless cost or difficulty says otherwise. |
 | `gpt-5.6-powerful` | You need stronger reasoning for complex design, risky refactors, broad verification, or tasks where mistakes are expensive. |
 | `gpt-astra-low-cost` | You want Astra only for reasoning-heavy agents while keeping lower-cost GPT-5.6 models for code/light roles. |
 | `gpt-astra-recommended` | You want a balanced Astra-oriented profile for harder planning/reasoning, while keeping code work on the cost-aware model. |
