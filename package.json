@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "export:model-catalog": "node --experimental-strip-types scripts/export-model-catalog.ts"
   },
   "version": "1.4.0"
 }

@@ -76,6 +76,32 @@ The preview shows each managed agent's current canonical entry and runtime entry
 
 On success, the selected ODD mappings are written and Pi reloads only for changed files. The canonical profile uses `thinking`; the runtime mapping receives the same value as `effort`. Already-active files stay untouched, but direct selection still aligns the current session. Missing model/auth, unavailable rollback model, unsupported orchestrator thinking, and clamped thinking fail before file mutation. A later file-switch failure attempts session restoration and reports restoration errors.
 
+## Export a credential-available model catalog
+
+Generate the local catalog for the future in-Pi profile editor (the editor is not included yet):
+
+```bash
+npm run export:model-catalog
+```
+
+The default output is `config/model-catalog.json`, relative to the current working directory. The script uses the supported Pi SDK `ModelRuntime.create()` and asynchronous `getAvailable()` APIs, not the entire bundled model registry. Run it with the same credential environment and `PI_CODING_AGENT_DIR` as Pi. It does not start an agent session or load project/provider extensions; models registered only by those extensions are not included.
+
+Local Node package resolution looks for `@earendil-works/pi-coding-agent`. For a global or installer-managed Pi, pass its package directory or JavaScript SDK entry explicitly; no machine-specific installation path is assumed:
+
+```bash
+npm run export:model-catalog -- --sdk /path/to/pi-coding-agent --output /private/path/model-catalog.json
+```
+
+Use a Node version supported by your Pi SDK (the current SDK requires Node 22.19+). Missing/incompatible SDKs, configuration errors, and empty availability fail before writing the output. A successful export replaces the chosen file; refresh it when credentials or models change. Availability means Pi can resolve provider authentication, not that a remote request or account entitlement has been verified.
+
+### Catalog contract (version 1)
+
+The reusable `extensions/model-profiles/catalog.ts` validator rejects empty catalogs, unknown fields, duplicate identities, invalid metadata, and noncanonical ordering. The JSON envelope contains `schemaVersion: 1`, `source: "pi-model-runtime"`, an ISO UTC `generatedAt` timestamp, and `models`.
+
+Each model contains only `provider`, `id`, `model` (`provider/id`), `name`, `reasoning`, `contextWindow`, `maxTokens`, and `input` (`text`/`image`). Provider IDs cannot contain `/`; model IDs may contain `/` and are preserved verbatim. Entries sort by the full identity using locale-independent code-unit ordering. Identical inputs produce identical model data; the generation timestamp changes between runs. Reasoning metadata is not a guarantee of support for any specific effort level.
+
+The exporter deliberately omits credentials, headers, URLs, auth status, and arbitrary SDK properties. Do not commit your personal generated catalog: although it contains no credential fields, provider/model availability and custom display names can reveal local configuration. No personal catalog is shipped in this repository, and exporting does not change profiles, `named-profiles.json`, or the active session.
+
 ## Add a registered profile
 
 To add a third profile such as `local`, keep the same active managed-agent coverage as existing profiles:
