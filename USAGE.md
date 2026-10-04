@@ -69,6 +69,22 @@ Installed/global profile status does not prove effective project routing: projec
 
 The preview shows each managed agent's current canonical entry and runtime entry next to the selected profile's effective after state, including opposite-provider judge mappings when configured for a paired profile. Missing legacy entries can be repaired by a switch. Malformed existing managed entries stop the switch before any write.
 
+### Preview Grok 4.7 assignments
+
+```text
+/jb-odd-models preview grok-4-7
+```
+
+`grok-4-7` copies all 13 agents from `grok`, changing only the model to `xai/grok-4.7`:
+
+| Agents | Configured thinking |
+|---|---|
+| `gentle-ai-worker`, `jd-fix-agent` | `high` |
+| `gentle-ai-explore`, `gentle-ai-verify`, `orchestrator` | `medium` |
+| `review-risk`, `review-resilience`, `review-readability`, `review-reliability`, `review-refuter`, `review-validator`, `jd-judge-a`, `jd-judge-b` | `medium` |
+
+This profile is unpaired, so its judges also stay on Grok 4.7. The default remains `openaigentle`; preview does not activate the profile. These are configured values copied to runtime `effort`, not proof that the provider supports or executes those levels.
+
 ### Select a profile
 
 ```text

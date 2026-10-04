@@ -145,14 +145,16 @@ test("malformed manifest or registered profile fails before any target mutation"
 });
 
 test("fresh temp install copies manifest, registered profiles, extension helpers, and derived default active files", async () => {
+  // The fixture excludes any private generated catalog in the working tree.
+  const packageRoot = await copyPackageFixture();
   const piHome = await preparePiHome("installer-fresh");
-  const result = await runInstall(".", piHome);
-  const { manifest, profiles } = await expectedDefaultFrom();
+  const result = await runInstall(packageRoot, piHome);
+  const { manifest, profiles } = await expectedDefaultFrom(packageRoot);
 
   assert.equal(result.changed, true);
   assert.deepEqual(await readJson(join(piHome, "gentle-ai", "model-profiles.manifest.json")), manifest);
   for (const registration of manifest.profiles) {
-    assert.deepEqual(await readJson(join(piHome, "gentle-ai", registration.modelsFile)), await readJson(join("config", registration.modelsFile)));
+    assert.deepEqual(await readJson(join(piHome, "gentle-ai", registration.modelsFile)), await readJson(join(packageRoot, "config", registration.modelsFile)));
   }
   assert.deepEqual(await readJson(join(piHome, "gentle-ai", "models.json")), deriveCanonicalProfileForSelection(manifest.defaultProfile, profiles, manifest));
   assert.deepEqual((await readJson(join(piHome, "agent", "subagents.json"))).model_profiles, deriveRuntimeModelProfilesForSelection(manifest.defaultProfile, profiles, manifest));

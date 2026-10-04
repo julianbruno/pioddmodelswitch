@@ -1,0 +1,54 @@
+{
+  "gentle-ai-explore": {
+    "model": "xai/grok-4.7",
+    "thinking": "medium"
+  },
+  "gentle-ai-worker": {
+    "model": "xai/grok-4.7",
+    "thinking": "high"
+  },
+  "jd-fix-agent": {
+    "model": "xai/grok-4.7",
+    "thinking": "high"
+  },
+  "gentle-ai-verify": {
+    "model": "xai/grok-4.7",
+    "thinking": "medium"
+  },
+  "orchestrator": {
+    "model": "xai/grok-4.7",
+    "thinking": "medium"
+  },
+  "review-risk": {
+    "model": "xai/grok-4.7",
+    "thinking": "medium"
+  },
+  "review-resilience": {
+    "model": "xai/grok-4.7",
+    "thinking": "medium"
+  },
+  "review-readability": {
+    "model": "xai/grok-4.7",
+    "thinking": "medium"
+  },
+  "review-reliability": {
+    "model": "xai/grok-4.7",
+    "thinking": "medium"
+  },
+  "review-refuter": {
+    "model": "xai/grok-4.7",
+    "thinking": "medium"
+  },
+  "review-validator": {
+    "model": "xai/grok-4.7",
+    "thinking": "medium"
+  },
+  "jd-judge-a": {
+    "model": "xai/grok-4.7",
+    "thinking": "medium"
+  },
+  "jd-judge-b": {
+    "model": "xai/grok-4.7",
+    "thinking": "medium"
+  }
+}

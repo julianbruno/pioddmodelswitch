@@ -159,7 +159,7 @@ test("packaged manifest defaults to openaigentle and registers named profiles pl
   const manifest = await packagedManifest();
   const catalog = await packagedNamedProfiles();
   const namedProfileNames = catalog.profiles.map((profile) => profile.name);
-  const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep", ...gpt61Profiles.map(({ name }) => name)];
+  const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", "grok-4-7", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep", ...gpt61Profiles.map(({ name }) => name)];
   assert.ok(namedProfileNames.includes("gpt-5.5-powerful"));
 
   assert.equal(manifest.schemaVersion, 2);
@@ -283,6 +283,38 @@ test("openai6-1-gentle uses registered OpenAI Sol and Luna routes and preserves 
   assert.deepEqual(deriveRuntimeModelProfilesForSelection(name, profiles, manifest),
     Object.fromEntries(Object.entries(expected).map(([agent, entry]) =>
       [agent, { model: entry.model, effort: entry.thinking }])));
+});
+
+test("grok-4-7 copies all grok agents and thinking while changing only the model", async () => {
+  const manifest = await packagedManifest();
+  const name = "grok-4-7";
+  assert.deepEqual(manifest.profiles.find((profile) => profile.name === name), {
+    name, modelsFile: "models.grok-4-7.json",
+  });
+  assert.equal(manifest.defaultProfile, "openaigentle");
+  assert.deepEqual(manifest.oppositeProviderJudges.profilePairs, expectedOppositePairs);
+  assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, name), false);
+
+  const profiles = await packagedProfiles(manifest);
+  const profile = profiles[name];
+  const expected = Object.fromEntries(Object.entries(profiles.grok).map(([agent, entry]) => [
+    agent, { ...entry, model: "xai/grok-4.7" },
+  ]));
+  assert.equal(Object.keys(profile).length, 13);
+  assert.deepEqual(Object.keys(profile), Object.keys(profiles.grok));
+  assert.deepEqual(Object.keys(profile).sort(), expectedAgents.slice().sort());
+  assert.deepEqual(profile, expected);
+  for (const agent of expectedAgents) {
+    assert.deepEqual(profile[agent], {
+      model: "xai/grok-4.7",
+      thinking: ["gentle-ai-worker", "jd-fix-agent"].includes(agent) ? "high" : "medium",
+    });
+  }
+  assert.deepEqual(deriveCanonicalProfileForSelection(name, profiles, manifest), expected);
+  assert.deepEqual(deriveRuntimeModelProfilesForSelection(name, profiles, manifest),
+    Object.fromEntries(Object.entries(expected).map(([agent, entry]) => [
+      agent, { model: entry.model, effort: entry.thinking },
+    ])));
 });
 
 test("gpt-6-1 lanes are standalone, unpaired, and route every ODD role explicitly", async () => {
