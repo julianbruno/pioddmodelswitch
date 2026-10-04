@@ -7,6 +7,9 @@ node_modules/
 .atl/
 .pi/
 
+# Personal generated model catalog (availability can reveal local configuration)
+config/model-catalog.json
+
 # Local environment values (keep distributable examples)
 .env
 .env.*

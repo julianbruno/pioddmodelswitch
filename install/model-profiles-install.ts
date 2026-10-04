@@ -18,6 +18,7 @@ import {
   type ModelProfilesManifest,
   type ValidatedModelProfile,
 } from "../extensions/model-profiles/core.ts";
+import { validateModelCatalog } from "../extensions/model-profiles/catalog.ts";
 
 type InstallOptions = {
   packageRoot?: string;
@@ -47,7 +48,7 @@ type Plan = {
 
 const configMode = 0o600;
 const extensionMode = 0o644;
-const helperFiles = ["core.ts", "transaction.ts"];
+const helperFiles = ["core.ts", "transaction.ts", "catalog.ts", "editor.ts"];
 const extensionFile = "odd-model-profiles.ts";
 // Migration-only: the predecessor entrypoint registered the retired command. It is moved into the
 // install backup only when its bytes equal a released package version (SHA-256 of commits 484fd80,
@@ -137,6 +138,13 @@ async function loadCopyAssets(packageRoot: string): Promise<Map<string, string>>
     const relativePath = `extensions/model-profiles/${helper}`;
     assets.set(relativePath, await readText(join(packageRoot, "extensions", "model-profiles", helper), relativePath));
   }
+  const catalogRelative = "config/model-catalog.json";
+  const catalogPath = join(packageRoot, catalogRelative);
+  if (await exists(catalogPath)) {
+    const catalogText = await readText(catalogPath, catalogRelative);
+    validateModelCatalog(parseJsonObject(catalogText, "Model catalog", catalogPath));
+    assets.set(catalogRelative, catalogText);
+  }
   return assets;
 }
 
@@ -203,6 +211,10 @@ function planInstall(options: {
   }
   for (const helper of helperFiles) {
     plans.push({ path: join(extensionDir, "model-profiles", helper), content: options.copyAssets.get(`extensions/model-profiles/${helper}`)!, mode: extensionMode });
+  }
+  const catalogText = options.copyAssets.get("config/model-catalog.json");
+  if (catalogText !== undefined) {
+    plans.push({ path: join(gentleDir, "model-catalog.json"), content: catalogText, mode: configMode });
   }
   return plans;
 }

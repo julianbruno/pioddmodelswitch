@@ -136,8 +136,8 @@ function validProfilePatch(patch: Record<string, unknown>): Record<string, unkno
   };
 }
 
-test("package version is 1.4.0", async () => {
-  assert.equal((await readJson("package.json")).version, "1.4.0");
+test("package version is 1.5.0", async () => {
+  assert.equal((await readJson("package.json")).version, "1.5.0");
 });
 
 test("claude-opus-5.5 has exact task-aware effort categories and one model", async () => {
@@ -167,7 +167,8 @@ test("packaged manifest defaults to openaigentle and registers named profiles pl
   assert.deepEqual(manifest.managedAgentGroups, {
     odd: expectedOddAgents,
   });
-  assert.deepEqual(manifest.reservedCommandNames, [...RESERVED_COMMAND_NAMES]);
+  // Explicit legacy lists remain unchanged; built-in reservations apply independently.
+  assert.deepEqual(manifest.reservedCommandNames, ["status", "list", "preview", "doctor", "undo", "recover"]);
   assert.deepEqual(manifest.oppositeProviderJudges, {
     enabled: true,
     agents: expectedJudgeAgents,
@@ -371,6 +372,17 @@ test("manifest validation rejects unsupported versions, missing groups, duplicat
   assert.throws(() => validateManifest(validManifestPatch({
     profiles: [{ name: "Unsafe_Name", modelsFile: "models.Unsafe_Name.json" }],
   })), /safe lowercase command name/);
+});
+
+test("edit is reserved even when an explicit manifest command list omits it", () => {
+  assert.ok((RESERVED_COMMAND_NAMES as readonly string[]).includes("edit"));
+  assert.throws(() => validateManifest(validManifestPatch({
+    reservedCommandNames: ["status", "list", "preview", "doctor", "undo", "recover"],
+    profiles: [{ name: "edit", modelsFile: "models.edit.json" }],
+    defaultProfile: "edit",
+    oppositeProviderJudges: { enabled: false, agents: [], profilePairs: {} },
+  })), /profile name 'edit' is reserved for commands/);
+  assert.ok(validateManifest(validManifestPatch({ reservedCommandNames: undefined })).reservedCommandNames.includes("edit"));
 });
 
 test("profile validation rejects malformed objects, coverage drift, invalid identifiers, and invalid effort values", () => {

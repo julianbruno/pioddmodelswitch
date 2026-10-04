@@ -34,8 +34,9 @@ The installer copies the command and profile data into Pi home:
 | Target | Purpose |
 |---|---|
 | `$PI_HOME/agent/extensions/odd-model-profiles.ts` | Slash command extension |
-| `$PI_HOME/agent/extensions/model-profiles/` | Helper modules |
+| `$PI_HOME/agent/extensions/model-profiles/` | Helper modules, including catalog validation and the profile editor |
 | `$PI_HOME/gentle-ai/model-profiles.manifest.json` | Profile manifest |
+| `$PI_HOME/gentle-ai/model-catalog.json` | Optional generated catalog copied only when `config/model-catalog.json` exists in the package |
 | `$PI_HOME/gentle-ai/models.<profile>.json` | Every registered named profile, including `openaigentle`, GPT-5.6, GPT Astra, GPT Astra-only, Grok lanes, and legacy aliases |
 | `$PI_HOME/gentle-ai/models.json` | Derived active canonical profile |
 | `$PI_HOME/agent/subagents.json` | Merged runtime `model_profiles` entries |
@@ -77,6 +78,7 @@ Expected result:
 - Pi recognizes `/jb-odd-models`.
 - `status` shows `openaigentle` by default, another registered profile, or intentionally `custom`.
 - `doctor` reports healthy managed mappings or actionable diagnostics.
+- `/jb-odd-models edit` can view profiles without a catalog. Editing or creating needs `npm run export:model-catalog` first; reinstall to copy `config/model-catalog.json`, or copy that file to `$PI_HOME/gentle-ai/model-catalog.json`.
 
 ## Common recovery path
 

@@ -1,6 +1,6 @@
 # Use `/jb-odd-models`
 
-The command reports, previews, diagnoses, switches, undoes, or recovers the global model profile used by the managed orchestrator, ODD generic agents, and configured judge/reviewer agents. Registered profile names and optional opposite-provider judge routing come from `model-profiles.manifest.json` instead of being hard-coded.
+The command reports, previews, diagnoses, switches, undoes, recovers, or edits the global model profile used by the managed orchestrator, ODD generic agents, and configured judge/reviewer agents. Registered profile names and optional opposite-provider judge routing come from `model-profiles.manifest.json` instead of being hard-coded.
 
 ## Command reference
 
@@ -14,6 +14,7 @@ The command reports, previews, diagnoses, switches, undoes, or recovers the glob
 | `/jb-odd-models <profile>` | Validates registered profiles and current files, aligns this Pi session with the effective `orchestrator` model and standard thinking level, writes changed canonical/runtime mappings, then reloads Pi only if files changed. No-op when session and files already match. |
 | `/jb-odd-models undo` | Reverts the last completed profile transaction only if both files still match the recorded transaction output, then reloads Pi. |
 | `/jb-odd-models recover` | Finishes, records, or clears an interrupted profile transaction when the current file bytes match a safe recorded state, then reloads Pi when recovery changed state. |
+| `/jb-odd-models edit` | Opens a Pi dialog to view, edit, or create a named profile from a template. Viewing is read-only; saving never changes the active profile. |
 | `/jb-odd-models <invalid>` | Displays an unknown-argument warning and usage. Read-only. |
 
 Arguments are trimmed and case-insensitive. Dots and hyphens are supported in registered path-safe profile names, so `/jb-odd-models GPT-5.6-RECOMMENDED` selects `gpt-5.6-recommended`.
@@ -76,15 +77,25 @@ The preview shows each managed agent's current canonical entry and runtime entry
 
 On success, the selected ODD mappings are written and Pi reloads only for changed files. The canonical profile uses `thinking`; the runtime mapping receives the same value as `effort`. Already-active files stay untouched, but direct selection still aligns the current session. Missing model/auth, unavailable rollback model, unsupported orchestrator thinking, and clamped thinking fail before file mutation. A later file-switch failure attempts session restoration and reports restoration errors.
 
+## Edit or create a named profile
+
+```text
+/jb-odd-models edit
+```
+
+Pi dialogs offer View, Edit, or Create. Viewing shows each managed agent's model and thinking and works without a catalog. Edit and Create require a valid installed catalog at `$PI_HOME/gentle-ai/model-catalog.json` and only offer those models plus standard thinking levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). Create clones a complete existing profile as the template, then registers the new name in the manifest. Saving asks for confirmation. Cancelled dialogs write nothing. Existing assignments that are missing from the catalog must be replaced before save; the editor never invents a model. New names must be safe lowercase command names, cannot use reserved actions including `edit`, and cannot overwrite an existing profile file. Saving never changes the active canonical/runtime profile; use `/jb-odd-models <profile>` afterwards if you want to apply it.
+
+If the manifest or any loaded named profile changes while the editor is open, saving fails without writing. Reopen `/jb-odd-models edit` to load the current files and retry. The editor compares original file bytes, so formatting-only changes also count as drift. These are optimistic checks, not a lock: an external writer can still race in the small interval between the checks and writes. Individual files are replaced atomically, but creating a profile and registering it is not a crash-safe multi-file transaction. Avoid simultaneous file edits or installs while saving.
+
 ## Export a credential-available model catalog
 
-Generate the local catalog for the future in-Pi profile editor (the editor is not included yet):
+Generate the local catalog used by `/jb-odd-models edit`:
 
 ```bash
 npm run export:model-catalog
 ```
 
-The default output is `config/model-catalog.json`, relative to the current working directory. The script uses the supported Pi SDK `ModelRuntime.create()` and asynchronous `getAvailable()` APIs, not the entire bundled model registry. Run it with the same credential environment and `PI_CODING_AGENT_DIR` as Pi. It does not start an agent session or load project/provider extensions; models registered only by those extensions are not included.
+The default output is `config/model-catalog.json`, relative to the current working directory. Reinstall after generating it to copy the catalog into `$PI_HOME/gentle-ai/model-catalog.json`, or copy that file there yourself. An existing install without a catalog still loads; `/jb-odd-models edit` can view profiles and tells you how to generate a catalog before mutation. The script uses the supported Pi SDK `ModelRuntime.create()` and asynchronous `getAvailable()` APIs, not the entire bundled model registry. Run it with the same credential environment and `PI_CODING_AGENT_DIR` as Pi. It does not start an agent session or load project/provider extensions; models registered only by those extensions are not included.
 
 Local Node package resolution looks for `@earendil-works/pi-coding-agent`. For a global or installer-managed Pi, pass its package directory or JavaScript SDK entry explicitly; no machine-specific installation path is assumed:
 
@@ -104,7 +115,7 @@ The exporter deliberately omits credentials, headers, URLs, auth status, and arb
 
 ## Add a registered profile
 
-To add a third profile such as `local`, keep the same active managed-agent coverage as existing profiles:
+Prefer `/jb-odd-models edit` to create or change a profile from the catalog. To add a third profile such as `local` by hand, keep the same active managed-agent coverage as existing profiles:
 
 1. Add `{ "name": "local", "modelsFile": "models.local.json" }` to `model-profiles.manifest.json`.
 2. Create `models.local.json` with exactly every agent listed under the manifest's `managedAgentGroups` plus the configured `oppositeProviderJudges.agents` when that block is enabled.
@@ -112,11 +123,11 @@ To add a third profile such as `local`, keep the same active managed-agent cover
 4. Restart or reinstall so the installed manifest/profile files are copied into Pi home.
 5. Run `/jb-odd-models list`, `/jb-odd-models preview local`, and `/jb-odd-models doctor`.
 
-Profile names must be safe lowercase command names: start with a lowercase letter, use lowercase letters/digits separated by single `-` or `.` segments, and cannot use reserved command names such as `status`, `list`, `preview`, `doctor`, `undo`, or `recover`.
+Profile names must be safe lowercase command names: start with a lowercase letter, use lowercase letters/digits separated by single `-` or `.` segments, and cannot use reserved command names such as `status`, `list`, `preview`, `doctor`, `undo`, `recover`, or `edit`.
 
 ## Completion
 
-Argument completion is synchronous and manifest-backed. It offers `status`, `list`, `preview`, `doctor`, `undo`, `recover`, and registered profile names filtered by the typed prefix; `preview <prefix>` completes registered profile names for preview commands.
+Argument completion is synchronous and manifest-backed. It offers `status`, `list`, `preview`, `doctor`, `undo`, `recover`, `edit`, and registered profile names filtered by the typed prefix; `preview <prefix>` completes registered profile names for preview commands.
 
 ## Installed extension files
 

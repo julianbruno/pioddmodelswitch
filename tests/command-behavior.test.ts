@@ -17,7 +17,12 @@ type RegisteredCommand = {
 
 type FakeCommandContext = {
   cwd: string;
-  ui: { notify(message: string, level: string): void };
+  ui: {
+    notify(message: string, level: string): void;
+    select?(title: string, options: string[]): Promise<string | undefined>;
+    confirm?(title: string, message: string): Promise<boolean>;
+    input?(title: string, placeholder?: string): Promise<string | undefined>;
+  };
   reload(): Promise<void>;
   model?: { provider: string; id: string };
   modelRegistry: { find(provider: string, id: string): unknown };
@@ -582,4 +587,27 @@ test("recover command finishes a real interrupted active switch through the comm
   assert.equal(harness.reloadCount(), 1);
   assert.match(harness.notifications.at(-1)?.message ?? "", /recovery finished/i);
   assert.deepEqual((await readJson(harness.runtimePath)).model_profiles["gentle-ai-explore"], { model: "xai/gentle-ai-explore", effort: "xhigh" });
+});
+
+test("edit subcommand opens the profile editor without applying the active profile", async () => {
+  const harness = await createHarness();
+  assert.ok(harness.command.getArgumentCompletions?.("e")?.some((item) => item.value === "edit"));
+  await harness.command.handler("edit extra", harness.ctx);
+  assert.match(harness.notifications.at(-1)?.message ?? "", /Unknown argument: edit extra/);
+  assert.equal(harness.reloadCount(), 0);
+
+  const before = await snapshotTree(harness.root);
+  let step = 0;
+  harness.ctx.ui.select = async (_title, options) => {
+    step += 1;
+    if (step === 1) return options.includes("View") ? "View" : options[0];
+    return options.includes("openai") ? "openai" : options[0];
+  };
+  harness.ctx.ui.confirm = async () => false;
+  harness.ctx.ui.input = async () => undefined;
+  await harness.command.handler("edit", harness.ctx);
+  assert.equal(harness.reloadCount(), 0);
+  assert.match(harness.notifications.at(-1)?.message ?? "", /Profile: openai/);
+  assert.deepEqual(await snapshotTree(harness.root), before);
+  assert.deepEqual((await readJson(harness.canonicalPath)).orchestrator, { model: "openai-codex/orchestrator", thinking: "high" });
 });

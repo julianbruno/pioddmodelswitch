@@ -174,7 +174,10 @@ test("fresh temp install copies manifest, registered profiles, extension helpers
   assert.equal(result.activeProfile, manifest.defaultProfile);
   assert.equal(await exists(join(piHome, "agent", "extensions", "model-profiles", "core.ts")), true);
   assert.equal(await exists(join(piHome, "agent", "extensions", "model-profiles", "transaction.ts")), true);
+  assert.equal(await exists(join(piHome, "agent", "extensions", "model-profiles", "catalog.ts")), true);
+  assert.equal(await exists(join(piHome, "agent", "extensions", "model-profiles", "editor.ts")), true);
   assert.equal(await exists(join(piHome, "agent", "extensions", "core.ts")), false);
+  assert.equal(await exists(join(piHome, "gentle-ai", "model-catalog.json")), false);
   assert.equal(await exists(join(piHome, "backups")), false);
 });
 
@@ -421,4 +424,34 @@ test("installer refuses an unreleased or non-regular predecessor extension befor
     assert.equal(await exists(join(piHome, "backups")), false, kind);
     assert.equal(await exists(join(piHome, "agent", "extensions", "odd-model-profiles.ts")), false, kind);
   }
+});
+
+test("installer copies an optional generated catalog when present and still installs without one", async () => {
+  const packageRoot = await copyPackageFixture();
+  const piHomeWithout = await preparePiHome("installer-no-catalog");
+  await runInstall(packageRoot, piHomeWithout);
+  assert.equal(await exists(join(piHomeWithout, "gentle-ai", "model-catalog.json")), false);
+  assert.equal(await exists(join(piHomeWithout, "agent", "extensions", "model-profiles", "editor.ts")), true);
+  assert.equal(await exists(join(piHomeWithout, "agent", "extensions", "model-profiles", "catalog.ts")), true);
+
+  const catalog = {
+    schemaVersion: 1,
+    source: "pi-model-runtime",
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    models: [{
+      provider: "example",
+      id: "demo",
+      model: "example/demo",
+      name: "Demo",
+      reasoning: true,
+      contextWindow: 1000,
+      maxTokens: 256,
+      input: ["text"],
+    }],
+  };
+  await writeJson(join(packageRoot, "config", "model-catalog.json"), catalog);
+  const piHomeWith = await preparePiHome("installer-with-catalog");
+  await runInstall(packageRoot, piHomeWith);
+  assert.deepEqual(await readJson(join(piHomeWith, "gentle-ai", "model-catalog.json")), catalog);
+  assert.equal((await stat(join(piHomeWith, "gentle-ai", "model-catalog.json"))).mode & 0o777, 0o600);
 });

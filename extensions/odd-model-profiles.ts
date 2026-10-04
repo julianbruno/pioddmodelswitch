@@ -30,6 +30,7 @@ import {
   undoLastModelProfileTransaction,
   type ModelProfileTransactionTargets,
 } from "./model-profiles/transaction.ts";
+import { runProfileEditor } from "./model-profiles/editor.ts";
 
 export type ModelProfileExtensionOptions = {
   piHome?: string;
@@ -60,7 +61,7 @@ type ProfileRuntimeState = {
 };
 
 const COMMAND_NAME = "jb-odd-models";
-const STATIC_ACTIONS = ["status", "list", "preview", "doctor", "undo", "recover"] as const;
+const STATIC_ACTIONS = ["status", "list", "preview", "doctor", "undo", "recover", "edit"] as const;
 const providerModelPattern = /^[^/\s]+\/[^/\s]+$/;
 const hasOwn = Object.prototype.hasOwnProperty;
 
@@ -230,7 +231,7 @@ function selectedProfile(registry: ProfileRegistry, name: string): ValidatedMode
 
 function usage(manifest?: ModelProfilesManifest): string {
   const profilePart = manifest ? registeredProfileNames(manifest).join("|") : "<profile>";
-  return `Usage: /${COMMAND_NAME} status|list|preview <profile>|doctor|undo|recover|${profilePart}`;
+  return `Usage: /${COMMAND_NAME} status|list|preview <profile>|doctor|undo|recover|edit|${profilePart}`;
 }
 
 function formatCanonicalEntry(entry: ModelProfileEntry | undefined): string {
@@ -586,12 +587,13 @@ function completionItems(paths: ResolvedPaths, prefix: string): Array<{ value: s
     { value: "doctor", label: "doctor — Diagnose profile files, local catalog, and transaction state without writing" },
     { value: "undo", label: "undo — Revert the last completed profile transaction if files still match" },
     { value: "recover", label: "recover — Finish or clear an interrupted profile transaction" },
+    { value: "edit", label: "edit — View, edit, or create a named profile" },
     ...profileNames.map((name) => ({ value: name, label: `${name} — Activate ${name} profile` })),
   ].filter(({ value }) => value.startsWith(normalized));
   return options.length ? options : null;
 }
 
-function parseArgs(args: string): { kind: "status" | "list" | "doctor" | "undo" | "recover" } | { kind: "preview" | "switch"; name: string } | { kind: "unknown"; value: string } {
+function parseArgs(args: string): { kind: "status" | "list" | "doctor" | "undo" | "recover" | "edit" } | { kind: "preview" | "switch"; name: string } | { kind: "unknown"; value: string } {
   const tokens = String(args ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return { kind: "status" };
   if (tokens.length === 1 && tokens[0] === "status") return { kind: "status" };
@@ -599,6 +601,7 @@ function parseArgs(args: string): { kind: "status" | "list" | "doctor" | "undo" 
   if (tokens.length === 1 && tokens[0] === "doctor") return { kind: "doctor" };
   if (tokens.length === 1 && tokens[0] === "undo") return { kind: "undo" };
   if (tokens.length === 1 && tokens[0] === "recover") return { kind: "recover" };
+  if (tokens.length === 1 && tokens[0] === "edit") return { kind: "edit" };
   if (tokens[0] === "preview" && tokens.length === 2) return { kind: "preview", name: tokens[1] };
   if (tokens[0] === "preview") return { kind: "unknown", value: tokens.join(" ") };
   if (tokens.length === 1 && !STATIC_ACTIONS.includes(tokens[0] as (typeof STATIC_ACTIONS)[number])) return { kind: "switch", name: tokens[0] };
@@ -609,7 +612,7 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
   const paths = resolvePaths(options);
 
   pi.registerCommand(COMMAND_NAME, {
-    description: "Show, preview, or change the global ODD model profile.",
+    description: "Show, preview, edit, or change the global ODD model profile.",
     getArgumentCompletions: (prefix: string) => completionItems(paths, prefix),
     handler: async (args, ctx) => {
       const parsed = parseArgs(args);
@@ -673,6 +676,23 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error);
           ctx.ui.notify(`Reload failed (${detail}), but recovered profile files remain active. Run /reload manually or restart Pi.`, "error");
+        }
+        return;
+      }
+      if (parsed.kind === "edit") {
+        const ui = ctx.ui;
+        if (typeof ui.select !== "function" || typeof ui.confirm !== "function" || typeof ui.input !== "function") {
+          ctx.ui.notify("Profile editor needs an interactive or RPC UI.", "error");
+          return;
+        }
+        try {
+          await runProfileEditor(ui, {
+            gentleDir: paths.gentleDir,
+            manifestPath: paths.manifestPath,
+            catalogPath: join(paths.gentleDir, "model-catalog.json"),
+          });
+        } catch (error) {
+          ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
         }
         return;
       }

@@ -27,7 +27,7 @@ export const KNOWN_OPPOSITE_PROVIDER_JUDGES = [
   "jd-judge-a",
   "jd-judge-b",
 ] as const;
-export const RESERVED_COMMAND_NAMES = ["status", "list", "preview", "doctor", "undo", "recover"] as const;
+export const RESERVED_COMMAND_NAMES = ["status", "list", "preview", "doctor", "undo", "recover", "edit"] as const;
 
 export type ManagedAgentGroupName = (typeof REQUIRED_MANAGED_AGENT_GROUPS)[number];
 export type ModelEffort = string;
