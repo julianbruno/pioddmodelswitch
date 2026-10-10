@@ -1,0 +1,15 @@
+{
+  "gentle-ai-explore": { "model": "claude-bridge/claude-fable-5-1", "thinking": "medium" },
+  "gentle-ai-worker": { "model": "claude-bridge/claude-fable-5-1", "thinking": "medium" },
+  "jd-fix-agent": { "model": "claude-bridge/claude-fable-5-1", "thinking": "medium" },
+  "gentle-ai-verify": { "model": "claude-bridge/claude-fable-5-1", "thinking": "high" },
+  "orchestrator": { "model": "claude-bridge/claude-fable-5-1", "thinking": "medium" },
+  "review-risk": { "model": "claude-bridge/claude-fable-5-1", "thinking": "high" },
+  "review-resilience": { "model": "claude-bridge/claude-fable-5-1", "thinking": "high" },
+  "review-readability": { "model": "claude-bridge/claude-fable-5-1", "thinking": "medium" },
+  "review-reliability": { "model": "claude-bridge/claude-fable-5-1", "thinking": "high" },
+  "review-refuter": { "model": "claude-bridge/claude-fable-5-1", "thinking": "high" },
+  "review-validator": { "model": "claude-bridge/claude-fable-5-1", "thinking": "high" },
+  "jd-judge-a": { "model": "claude-bridge/claude-fable-5-1", "thinking": "high" },
+  "jd-judge-b": { "model": "claude-bridge/claude-fable-5-1", "thinking": "high" }
+}

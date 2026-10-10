@@ -159,7 +159,7 @@ test("packaged manifest defaults to openaigentle and registers named profiles pl
   const manifest = await packagedManifest();
   const catalog = await packagedNamedProfiles();
   const namedProfileNames = catalog.profiles.map((profile) => profile.name);
-  const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", "grok-4-7", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep", ...gpt61Profiles.map(({ name }) => name)];
+  const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", "grok-4-7", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep", ...gpt61Profiles.map(({ name }) => name), "fable5.1", "open6.1revoopus5.5", "opus5.5revgpt6.1"];
   assert.ok(namedProfileNames.includes("gpt-5.5-powerful"));
 
   assert.equal(manifest.schemaVersion, 2);
@@ -375,6 +375,77 @@ test("claude-opus-5.5 is standalone, unpaired, and preserves its calibrated effo
       model: "claude-bridge/claude-opus-5-5", effort: expected[agent].thinking,
     }])));
   assert.equal(expected.orchestrator.thinking, "medium");
+});
+
+test("fable5.1 clones claude-opus-5.5 thinking on Fable, stays unpaired, and preserves effort at runtime", async () => {
+  const manifest = await packagedManifest();
+  const profiles = await packagedProfiles(manifest);
+  const fable = "claude-bridge/claude-fable-5-1";
+  const reference = profiles["claude-opus-5.5"];
+  const expected = Object.fromEntries(expectedAgents.map((agent) => [agent, { model: fable, thinking: reference[agent].thinking }]));
+  assert.deepEqual(Object.keys(profiles["fable5.1"]).sort(), expectedAgents.slice().sort());
+  assert.deepEqual(profiles["fable5.1"], expected);
+  assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, "fable5.1"), false);
+  assert.ok(!Object.values(manifest.oppositeProviderJudges.profilePairs).includes("fable5.1"));
+  assert.deepEqual(deriveCanonicalProfileForSelection("fable5.1", profiles, manifest), expected);
+  assert.deepEqual(deriveRuntimeModelProfilesForSelection("fable5.1", profiles, manifest),
+    Object.fromEntries(expectedAgents.map((agent) => [agent, { model: fable, effort: reference[agent].thinking }])));
+});
+
+test("open6.1revoopus5.5 splits review and judges between Sol and Opus over openai6-1-gentle, unpaired", async () => {
+  const manifest = await packagedManifest();
+  const profiles = await packagedProfiles(manifest);
+  const sol = "openai/gpt-6.1-sol";
+  const opus = "claude-bridge/claude-opus-5-5";
+  const base = profiles["openai6-1-gentle"];
+  const solReview = ["review-risk", "review-reliability", "review-validator", "jd-judge-a"];
+  const opusReview = ["review-resilience", "review-readability", "review-refuter", "jd-judge-b"];
+  const overrides = Object.fromEntries([
+    ...solReview.map((agent) => [agent, { model: sol, thinking: "high" }]),
+    ...opusReview.map((agent) => [agent, { model: opus, thinking: "high" }]),
+  ]);
+  const expected = Object.fromEntries(expectedAgents.map((agent) => [agent, overrides[agent] ?? base[agent]]));
+  const profile = profiles["open6.1revoopus5.5"];
+  assert.deepEqual(Object.keys(profile).sort(), expectedAgents.slice().sort());
+  assert.deepEqual(profile, expected);
+  for (const agent of expectedAgents) assert.equal(profile[agent].thinking, base[agent].thinking, agent);
+  for (const agent of expectedAgents.filter((agent) => !(agent in overrides))) assert.deepEqual(profile[agent], base[agent], agent);
+  const reviewers = (model: string) => manifest.oppositeProviderJudges.agents.filter((agent) => agent.startsWith("review-") && profile[agent].model === model);
+  assert.equal(reviewers(sol).length, 3);
+  assert.equal(reviewers(opus).length, 3);
+  assert.notEqual(profile["jd-judge-a"].model, profile["jd-judge-b"].model);
+  assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, "open6.1revoopus5.5"), false);
+  assert.ok(!Object.values(manifest.oppositeProviderJudges.profilePairs).includes("open6.1revoopus5.5"));
+  assert.deepEqual(deriveCanonicalProfileForSelection("open6.1revoopus5.5", profiles, manifest), expected);
+  assert.deepEqual(deriveRuntimeModelProfilesForSelection("open6.1revoopus5.5", profiles, manifest),
+    Object.fromEntries(Object.entries(expected).map(([agent, value]) => [agent, { model: value.model, effort: value.thinking }])));
+});
+
+test("opus5.5revgpt6.1 copies claude-opus-5.5 except a Sol jd-judge-b, unpaired", async () => {
+  const manifest = await packagedManifest();
+  const profiles = await packagedProfiles(manifest);
+  const opus = "claude-bridge/claude-opus-5-5";
+  const baseRaw = await readJson("config/models.claude-opus-5.5.json");
+  const raw = await readJson("config/models.opus5.5revgpt6.1.json");
+  // Same roles in the same file order; only jd-judge-b changes model.
+  assert.deepEqual(Object.keys(raw), Object.keys(baseRaw));
+  assert.deepEqual(raw, { ...baseRaw, "jd-judge-b": { model: sol, thinking: "high" } });
+  const base = profiles["claude-opus-5.5"];
+  const expected = Object.fromEntries(expectedAgents.map((agent) => [agent,
+    agent === "jd-judge-b" ? { model: sol, thinking: base[agent].thinking } : base[agent]]));
+  const profile = profiles["opus5.5revgpt6.1"];
+  assert.deepEqual(Object.keys(profile).sort(), expectedAgents.slice().sort());
+  assert.deepEqual(profile, expected);
+  for (const agent of expectedAgents) assert.equal(profile[agent].thinking, base[agent].thinking, agent);
+  assert.deepEqual(profile["jd-judge-a"], { model: opus, thinking: "high" });
+  assert.deepEqual(profile["jd-judge-b"], { model: sol, thinking: "high" });
+  assert.equal(profile["review-readability"].thinking, "medium");
+  assert.ok(expectedAgents.filter((agent) => agent !== "jd-judge-b").every((agent) => profile[agent].model === opus));
+  assert.equal(Object.hasOwn(manifest.oppositeProviderJudges.profilePairs, "opus5.5revgpt6.1"), false);
+  assert.ok(!Object.values(manifest.oppositeProviderJudges.profilePairs).includes("opus5.5revgpt6.1"));
+  assert.deepEqual(deriveCanonicalProfileForSelection("opus5.5revgpt6.1", profiles, manifest), expected);
+  assert.deepEqual(deriveRuntimeModelProfilesForSelection("opus5.5revgpt6.1", profiles, manifest),
+    Object.fromEntries(Object.entries(expected).map(([agent, value]) => [agent, { model: value.model, effort: value.thinking }])));
 });
 
 test("manifest validation rejects unsupported versions, missing groups, duplicate names, and reserved commands", () => {

@@ -143,6 +143,18 @@
     {
       "name": "gpt-6-1-powerful",
       "modelsFile": "models.gpt-6-1-powerful.json"
+    },
+    {
+      "name": "fable5.1",
+      "modelsFile": "models.fable5.1.json"
+    },
+    {
+      "name": "open6.1revoopus5.5",
+      "modelsFile": "models.open6.1revoopus5.5.json"
+    },
+    {
+      "name": "opus5.5revgpt6.1",
+      "modelsFile": "models.opus5.5revgpt6.1.json"
     }
   ]
 }
