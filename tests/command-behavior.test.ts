@@ -17,6 +17,8 @@ type RegisteredCommand = {
 
 type FakeCommandContext = {
   cwd: string;
+  hasUI?: boolean;
+  mode?: string;
   ui: {
     notify(message: string, level: string): void;
     select?(title: string, options: string[]): Promise<string | undefined>;
@@ -199,6 +201,80 @@ async function createHarness() {
     pi,
   };
 }
+
+test("list picker preserves manifest order and activates the selected hybrid orchestrator", async () => {
+  const h = await createHarness();
+  h.ctx.hasUI = true;
+  h.ctx.mode = "rpc";
+  h.ctx.ui.select = async (title, options) => {
+    assert.match(title, /Activate.*shared.*current Pi/i);
+    assert.deepEqual(options, [
+      "openai — openai-codex/orchestrator (high)",
+      "grok — xai/orchestrator (xhigh)",
+      "local — local/orchestrator (medium)",
+    ]);
+    return options[1];
+  };
+  await h.command.handler("list", h.ctx);
+  assert.deepEqual(h.session(), { model: { provider: "xai", id: "orchestrator" }, thinking: "xhigh" });
+  assert.deepEqual((await readJson(h.canonicalPath)).orchestrator, { model: "xai/orchestrator", thinking: "xhigh" });
+  assert.deepEqual((await readJson(h.runtimePath)).model_profiles.orchestrator, { model: "xai/orchestrator", effort: "xhigh" });
+  assert.deepEqual((await readJson(h.canonicalPath))["jd-judge-a"], { model: "openai-codex/jd-judge-a", thinking: "high" });
+  assert.deepEqual(h.modelCalls, ["xai/orchestrator"]);
+  assert.equal(h.reloadCount(), 1);
+});
+
+for (const outcome of ["cancel", "empty", "unknown", "raw-name", "throw", "no-ui", "no-select", "missing-model", "registry-changed"]) {
+  test(`list picker ${outcome} leaves files and session unchanged`, async () => {
+    const h = await createHarness();
+    h.ctx.hasUI = outcome !== "no-ui";
+    h.ctx.ui.select = async (_title, options) => {
+      if (outcome === "no-ui") assert.fail("no-UI must not open a picker");
+      if (outcome === "throw") throw new Error("dialog offline");
+      if (outcome === "cancel") return undefined;
+      if (outcome === "empty") return "";
+      if (outcome === "unknown") return "grok — forged/model (low)";
+      if (outcome === "raw-name") return "grok";
+      if (outcome === "missing-model") h.ctx.modelRegistry.find = () => undefined;
+      if (outcome === "registry-changed") await writeFile(join(h.gentleDir, "models.grok.json"), "{invalid");
+      return options[1];
+    };
+    if (outcome === "no-select") h.ctx.ui.select = undefined;
+    const before = await snapshotTree(h.root);
+    await h.command.handler("list", h.ctx);
+    const after = await snapshotTree(h.root);
+    if (outcome === "registry-changed") {
+      assert.equal(await readFile(h.canonicalPath, "utf8"), before.find(item => item.path === "gentle-ai/models.json")?.content);
+      assert.equal(await readFile(h.runtimePath, "utf8"), before.find(item => item.path === "agent/subagents.json")?.content);
+    } else assert.deepEqual(after, before);
+    assert.deepEqual(h.modelCalls, []);
+    assert.deepEqual(h.thinkingCalls, []);
+    assert.equal(h.reloadCount(), 0);
+    if (outcome === "no-ui" || outcome === "no-select") {
+      assert.match(h.notifications.at(-1)!.message, /Registered ODD profiles/);
+      assert.match(h.notifications.at(-1)!.message, /\/jb-odd-models <profile>/);
+    } else if (outcome !== "cancel" && outcome !== "empty") {
+      assert.equal(h.notifications.at(-1)?.level, "error");
+      if (outcome === "throw") assert.match(h.notifications.at(-1)!.message, /picker.*dialog offline/i);
+    }
+  });
+}
+
+test("selected activation persistence failure restores the original model and thinking", async () => {
+  const h = await createHarness();
+  h.ctx.hasUI = true;
+  h.ctx.ui.select = async (_title, options) => options[2];
+  await mkdir(h.journalDir, { recursive: true });
+  await writeFile(join(h.journalDir, "lock.json"), "invalid lock");
+  const before = await snapshotTree(h.root);
+  await h.command.handler("list", h.ctx);
+  assert.deepEqual(await snapshotTree(h.root), before);
+  assert.deepEqual(h.modelCalls, ["local/orchestrator", "openai-codex/orchestrator"]);
+  assert.deepEqual(h.thinkingCalls, ["medium", "high"]);
+  assert.deepEqual(h.session(), { model: { provider: "openai-codex", id: "orchestrator" }, thinking: "high" });
+  assert.match(h.notifications.at(-1)!.message, /original session restored/);
+  assert.equal(h.reloadCount(), 0);
+});
 
 test("status separates shared persisted sources from the invoking live orchestrator", async () => {
   const h = await createHarness();

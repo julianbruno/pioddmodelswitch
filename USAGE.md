@@ -13,7 +13,7 @@ This is not a session-local profile selector. Sessions using the same configurat
 | `/jb-odd-models` | Shows usage, active-state detection, and all managed mappings. Read-only. |
 | `/jb-odd-models status` | Shows active-state detection and all managed mappings. Read-only. |
 | `/jb-odd-models doctor` | Performs read-only diagnostics for manifest/profile shape, active canonical/runtime state, transaction journals/locks, local Pi catalog presence, effort compatibility, and auth configuration evidence. |
-| `/jb-odd-models list` | Lists registered profiles and the default profile. Read-only. |
+| `/jb-odd-models list` | Opens a profile activation picker in interactive or supported RPC UI. Without UI/select support, lists profiles and the default with a direct invocation hint; read-only fallback. |
 | `/jb-odd-models preview <profile>` | Shows managed canonical/runtime before → after mappings for a profile. Read-only. |
 | `/jb-odd-models <profile>` | Validates registered profiles and current files, aligns this Pi session with the effective `orchestrator` model and standard thinking level, writes changed canonical/runtime mappings, then reloads Pi only if files changed. No-op when session and files already match. |
 | `/jb-odd-models undo` | Reverts the last completed profile transaction only if both files still match the recorded transaction output, then reloads Pi. |
@@ -70,12 +70,16 @@ A missing local catalog model, missing auth status, or missing registry is a bou
 
 Installed/global profile status does not prove effective project routing: project overrides and the current Pi session registry can change the effective model catalog.
 
-### List and preview profiles
+### Pick a profile or preview without changing anything
 
 ```text
 /jb-odd-models list
 /jb-odd-models preview openaigentle
 ```
+
+**Selecting an option in `list` activates it immediately:** it changes shared configuration and sets the current Pi `/model` and thinking to that profile's effective `orchestrator` assignment, using the same validated activation and rollback path as `/jb-odd-models <profile>`. The picker title names these effects. Options follow manifest order and show `profile name — provider/model (thinking)`; mixed-review profiles show the orchestrator, not a judge's model. Pi's built-in `/model` is unchanged; no `/list` command is added.
+
+Cancel or an empty selection makes no writes, model/thinking changes, or reload. Unknown selections and picker errors stop without activation. Activation reloads the profile registry and checks the current Pi model registry after selection; an unavailable selected model fails safely. Without UI (including JSON/print mode) or a supported select dialog, `list` stays textual; use `/jb-odd-models <profile>` to activate directly. Use `preview`, not the picker, for read-only inspection.
 
 The preview shows each managed agent's current canonical entry and runtime entry next to the selected profile's effective after state, including opposite-provider judge mappings when configured for a paired profile. Missing legacy entries can be repaired by a switch. Malformed existing managed entries stop the switch before any write.
 
@@ -223,7 +227,7 @@ Prefer `/jb-odd-models edit` to create or change a profile from the invoking Pi 
 2. Create `models.local.json` with exactly every agent listed under the manifest's `managedAgentGroups` plus the configured `oppositeProviderJudges.agents` when that block is enabled.
 3. Use `{ "model": "provider/model", "thinking": "max" }` for each agent, choosing an effort appropriate for that model. The package accepts any nonempty, already-trimmed effort string and copies it verbatim; it does not trim, lowercase, whitelist, or downgrade values. Direct switching rejects nonstandard `orchestrator` thinking before mutation; other agents' efforts remain unrestricted and the installed runtime or provider may reject unsupported levels even after a successful switch.
 4. Restart or reinstall so the installed manifest/profile files are copied into Pi home.
-5. Run `/jb-odd-models list`, `/jb-odd-models preview local`, and `/jb-odd-models doctor`.
+5. Inspect with `/jb-odd-models preview local` and `/jb-odd-models doctor`; run `/jb-odd-models list` when ready to pick and activate a profile.
 
 Profile names must be safe lowercase command names: start with a lowercase letter, use lowercase letters/digits separated by single `-` or `.` segments, and cannot use reserved command names such as `status`, `list`, `preview`, `doctor`, `undo`, `recover`, or `edit`.
 

@@ -606,7 +606,7 @@ function completionItems(paths: ResolvedPaths, prefix: string): Array<{ value: s
 
   const options = [
     { value: "status", label: "status — Show active profile and mapping" },
-    { value: "list", label: "list — Show registered profiles" },
+    { value: "list", label: "list — Select and activate a shared profile (or list without UI)" },
     { value: "preview", label: "preview <profile> — Show before/after without writing" },
     { value: "doctor", label: "doctor — Diagnose profile files, local catalog, and transaction state without writing" },
     { value: "undo", label: "undo — Revert the last completed profile transaction if files still match" },
@@ -670,18 +670,41 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
     description: "Show shared persisted ODD mappings and the invoking live orchestrator, or change the shared profile.",
     getArgumentCompletions: (prefix: string) => completionItems(paths, prefix),
     handler: async (args, ctx) => {
-      const parsed = parseArgs(args);
+      let parsed = parseArgs(args);
       if (parsed.kind === "status") {
         ctx.ui.notify(await statusText(paths, ctx.model, pi.getThinkingLevel(), String(args ?? "").trim() === ""), "info");
         return;
       }
       if (parsed.kind === "list") {
         try {
-          ctx.ui.notify(listText(await loadRegistry(paths)), "info");
+          const registry = await loadRegistry(paths);
+          if (!ctx.hasUI || typeof ctx.ui.select !== "function") {
+            ctx.ui.notify(`${listText(registry)}\nActivate directly with /${COMMAND_NAME} <profile> (shared configuration and current Pi model/thinking).`, "info");
+            return;
+          }
+          const options = new Map(registeredProfileNames(registry.manifest).map(name => {
+            const entry = deriveCanonicalProfileForSelection(name, registry.profiles, registry.manifest).orchestrator;
+            return [`${name} — ${formatCanonicalEntry(entry)}`, name] as const;
+          }));
+          let selection: string | undefined;
+          try {
+            selection = await ctx.ui.select(
+              "Activate shared ODD profile and set current Pi model/thinking",
+              [...options.keys()],
+            );
+          } catch (error) {
+            throw new Error(`Profile picker failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          if (selection === undefined || selection === "") return;
+          const name = options.get(selection);
+          if (!name) throw new Error("Unknown profile picker selection; no profile activated.");
+          // Resolve the exact displayed option into the existing activation path.
+          // That path reloads the registry after the dialog before any mutation.
+          parsed = { kind: "switch", name };
         } catch (error) {
           ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+          return;
         }
-        return;
       }
       if (parsed.kind === "preview") {
         try {
