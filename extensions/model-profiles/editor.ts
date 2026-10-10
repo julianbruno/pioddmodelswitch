@@ -2,9 +2,25 @@ import { constants } from "node:fs";
 import { access, chmod, mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 
-import { validateModelCatalog, type CatalogModel, type ModelCatalog } from "./catalog.ts";
+// Plain allowlisted metadata only: SDK models never enter drafts or persistence.
+export type EditorModel = {
+  provider: string;
+  id: string;
+  model: string;
+  name: string;
+  reasoning: boolean;
+  thinkingLevelMap?: Record<string, string | number | null>;
+};
+export type ProfileEditorModelRegistry = {
+  getAvailable(): unknown | Promise<unknown>;
+  getError?(): string | undefined;
+  getRegisteredNativeProvider?(provider: string): unknown;
+  getRegisteredProviderConfig?(provider: string): unknown;
+};
+type ModelCatalog = { models: EditorModel[] };
 import {
   isJsonObject,
+  isModelIdentifier,
   managedAgents,
   registeredProfileNames,
   RESERVED_COMMAND_NAMES,
@@ -15,6 +31,8 @@ import {
   type ModelProfilesManifest,
   type ValidatedModelProfile,
 } from "./core.ts";
+
+import { balanceAvailableModels, buildBalanceRequest, consultBalance, consultationOptions, verifyProviderCap, type BalanceConsultation, type BalanceCriteria } from "./balancing.ts";
 
 export const SAVE_OPTION = "Save";
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
@@ -60,10 +78,10 @@ const MENU_EDIT = "Edit";
 const MENU_CREATE = "Create";
 
 export function agentChoice(agent: string, entry: ModelProfileEntry, inCatalog: boolean): string {
-  return `${agent}: ${entry.model} (${entry.thinking})${inCatalog ? "" : " [not in catalog]"}`;
+  return `${agent}: ${entry.model} (${entry.thinking})${inCatalog ? "" : " [unavailable live model]"}`;
 }
 
-export function modelChoice(model: CatalogModel): string {
+export function modelChoice(model: Pick<EditorModel, "model" | "name">): string {
   return `${model.model} — ${model.name}`;
 }
 
@@ -75,8 +93,46 @@ function serialized(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-function catalogHint(catalogPath: string): string {
-  return `A valid model catalog is required to edit or create profiles. Generate one with \`npm run export:model-catalog\` and copy it to ${catalogPath}, or reinstall after generating config/model-catalog.json.`;
+export function supportedThinking(model: EditorModel): string[] {
+  if (!model.reasoning) return ["off"];
+  const map = model.thinkingLevelMap;
+  const levels = [...THINKING_LEVELS, ...Object.keys(map ?? {}).filter((level) => !isThinkingLevel(level))];
+  return levels.filter((level) => {
+    if (map && Object.hasOwn(map, level) && map[level] === null) return false;
+    if (["low", "medium", "high"].includes(level)) return true;
+    return !!map && Object.hasOwn(map, level) && map[level] !== null && map[level] !== undefined;
+  });
+}
+
+export function normalizeAvailableModels(value: unknown): EditorModel[] {
+  if (!Array.isArray(value) || !value.length) throw new Error("No live models available.");
+  const identities = new Set<string>();
+  return value.map((raw) => {
+    if (!isJsonObject(raw) || typeof raw.provider !== "string" || !raw.provider.trim() ||
+        raw.provider !== raw.provider.trim() || raw.provider.includes("/") ||
+        typeof raw.id !== "string" || !raw.id.trim() || raw.id !== raw.id.trim()) {
+      throw new Error("Invalid live model identity.");
+    }
+    const model = `${raw.provider}/${raw.id}`;
+    if (!isModelIdentifier(model)) throw new Error("Invalid live model identity.");
+    if (identities.has(model)) throw new Error("Duplicate live model identity.");
+    identities.add(model);
+    const thinkingLevelMap: Record<string, string | number | null> = Object.create(null);
+    if (isJsonObject(raw.thinkingLevelMap)) {
+      for (const [level, mapped] of Object.entries(raw.thinkingLevelMap)) {
+        if (level && level === level.trim() &&
+            (mapped === null || typeof mapped === "string" || (typeof mapped === "number" && Number.isFinite(mapped)))) {
+          thinkingLevelMap[level] = mapped;
+        }
+      }
+    }
+    return {
+      provider: raw.provider, id: raw.id, model,
+      name: typeof raw.name === "string" && raw.name.trim() ? raw.name : raw.id,
+      reasoning: raw.reasoning === true,
+      thinkingLevelMap,
+    };
+  });
 }
 
 function assertWithin(root: string, candidate: string, label: string): string {
@@ -160,20 +216,12 @@ async function assertRegistryUnchanged(originalFiles: readonly FileSnapshot[]): 
   }
 }
 
-async function loadCatalog(catalogPath: string): Promise<ModelCatalog> {
-  let text: string;
-  try {
-    text = await readFile(catalogPath, "utf8");
-  } catch (error) {
-    const code = isJsonObject(error) && typeof error.code === "string" ? error.code : "";
-    if (code === "ENOENT") throw new Error(catalogHint(catalogPath));
-    throw error;
+async function loadAvailable(registry?: ProfileEditorModelRegistry): Promise<ModelCatalog> {
+  if (!registry || typeof registry.getAvailable !== "function" || registry.getError?.()) {
+    throw new Error("Live Pi model registry unavailable.");
   }
-  try {
-    return validateModelCatalog(JSON.parse(text));
-  } catch {
-    throw new Error(`Invalid model catalog at ${catalogPath}. ${catalogHint(catalogPath)}`);
-  }
+  // Installed extensions expose a synchronous facade; await also accepts async adapters.
+  return { models: normalizeAvailableModels(await registry.getAvailable()) };
 }
 
 function formatProfile(name: string, profile: ValidatedModelProfile, agents: readonly string[]): string {
@@ -259,13 +307,15 @@ async function pickModel(ui: ProfileEditorUI, catalog: ModelCatalog, current?: s
   return catalog.models.find((model) => modelChoice(model) === selected)?.model;
 }
 
-async function pickThinking(ui: ProfileEditorUI, current?: string): Promise<ThinkingLevel | undefined> {
-  const options = current && isThinkingLevel(current)
-    ? [current, ...THINKING_LEVELS.filter((level) => level !== current)]
-    : [...THINKING_LEVELS];
+async function pickThinking(ui: ProfileEditorUI, model: EditorModel, current: string): Promise<string | undefined> {
+  const supported = supportedThinking(model);
+  const preserved = `${current} [unsupported; preserve]`;
+  const options = supported.includes(current)
+    ? [current, ...supported.filter((level) => level !== current)]
+    : [preserved, ...supported];
   const selected = await ui.select("Thinking level", options);
-  if (!selected || !isThinkingLevel(selected)) return undefined;
-  return selected;
+  if (selected === preserved) return current;
+  return selected && supported.includes(selected) ? selected : undefined;
 }
 
 async function editDraft(options: {
@@ -281,21 +331,29 @@ async function editDraft(options: {
   io?: ProfileEditorIO;
 }): Promise<ProfileEditorResult> {
   const identities = catalogIdentities(options.catalog);
+  const assignmentChoice = (agent: string, entry: ModelProfileEntry): string => {
+    const model = options.catalog.models.find((model) => model.model === entry.model);
+    return agentChoice(agent, entry, identities.has(entry.model)) +
+      (model && !supportedThinking(model).includes(entry.thinking) ? " [unsupported thinking]" : "");
+  };
   const draft: ValidatedModelProfile = Object.fromEntries(
     options.agents.map((agent) => [agent, { ...options.draft[agent] }]),
   );
 
   while (true) {
     const choices = [
-      ...options.agents.map((agent) => agentChoice(agent, draft[agent], identities.has(draft[agent].model))),
+      ...options.agents.map((agent) => assignmentChoice(agent, draft[agent])),
       SAVE_OPTION,
     ];
     const selected = await options.ui.select(`Edit ${options.name}`, choices);
     if (!selected) return { wrote: false, cancelled: true };
     if (selected === SAVE_OPTION) {
-      const invalid = options.agents.filter((agent) => !identities.has(draft[agent].model) || !isThinkingLevel(draft[agent].thinking));
+      const invalid = options.agents.filter((agent) => {
+        const model = options.catalog.models.find((model) => model.model === draft[agent].model);
+        return !model || !supportedThinking(model).includes(draft[agent].thinking);
+      });
       if (invalid.length) {
-        options.ui.notify(`Replace assignments not in the catalog before saving: ${invalid.join(", ")}`, "error");
+        options.ui.notify(`Replace unavailable model or unsupported thinking assignments before saving: ${invalid.join(", ")}`, "error");
         continue;
       }
       let profile: ValidatedModelProfile;
@@ -334,14 +392,15 @@ async function editDraft(options: {
       return { wrote: true, cancelled: false };
     }
 
-    const agent = options.agents.find((name) => agentChoice(name, draft[name], identities.has(draft[name].model)) === selected);
+    const agent = options.agents.find((name) => assignmentChoice(name, draft[name]) === selected);
     if (!agent) {
       options.ui.notify("Unknown editor choice.", "error");
       continue;
     }
     const model = await pickModel(options.ui, options.catalog, identities.has(draft[agent].model) ? draft[agent].model : undefined);
     if (!model) return { wrote: false, cancelled: true };
-    const thinking = await pickThinking(options.ui, draft[agent].thinking);
+    const selectedModel = options.catalog.models.find((entry) => entry.model === model)!;
+    const thinking = await pickThinking(options.ui, selectedModel, draft[agent].thinking);
     if (!thinking) return { wrote: false, cancelled: true };
     draft[agent] = { model, thinking };
   }
@@ -351,6 +410,8 @@ export async function runProfileEditor(
   ui: ProfileEditorUI,
   paths: ProfileEditorPaths,
   io?: ProfileEditorIO,
+  modelRegistry?: ProfileEditorModelRegistry,
+  consultation?: BalanceConsultation,
 ): Promise<ProfileEditorResult> {
   let registry: EditorRegistry;
   try {
@@ -362,7 +423,7 @@ export async function runProfileEditor(
 
   const agents = managedAgents(registry.manifest);
   const names = registeredProfileNames(registry.manifest);
-  const action = await ui.select("Profile editor", [MENU_VIEW, MENU_EDIT, MENU_CREATE]);
+  const action = await ui.select("Profile editor", [MENU_VIEW, MENU_EDIT, MENU_CREATE, "Balance"]);
   if (!action) return { wrote: false, cancelled: true };
 
   if (action === MENU_VIEW) {
@@ -379,10 +440,89 @@ export async function runProfileEditor(
 
   let catalog: ModelCatalog;
   try {
-    catalog = await loadCatalog(paths.catalogPath);
-  } catch (error) {
-    ui.notify(error instanceof Error ? error.message : String(error), "error");
+    catalog = await loadAvailable(modelRegistry);
+  } catch {
+    // Registry failures can contain auth/configuration details; never echo them.
+    ui.notify("Live Pi model registry is missing, empty, invalid, or failed. Edit/Create/Balance unavailable; nothing was written. No file catalog fallback. View remains available.", "error");
     return { wrote: false, cancelled: false };
+  }
+
+  if (action === "Balance") {
+    try {
+      if (!consultation) throw new Error("Balance requires a supported interactive consultation UI.");
+      const referenceName = await ui.select("Balance reference profile", names);
+      if (!referenceName) return { wrote: false, cancelled: true };
+      const reference = registry.profiles[referenceName];
+      if (!reference) throw new Error("Unknown reference profile.");
+      const criteria: BalanceCriteria = { priority: "balanced" };
+      const mode = await ui.select("Balance criteria", ["Automatic balanced defaults", "Customize"]);
+      if (!mode) return { wrote: false, cancelled: true };
+      if (mode === "Customize") {
+        const priority = await ui.select("Priority", ["balanced", "quality", "budget", "latency"]);
+        if (!priority) return { wrote: false, cancelled: true };
+        criteria.priority = priority as BalanceCriteria['priority'];
+        const taskRisk = await ui.input("Optional task/risk context", "Leave empty for defaults");
+        if (taskRisk === undefined) return { wrote: false, cancelled: true };
+        if (taskRisk.trim()) criteria.taskRisk = taskRisk;
+      } else if (mode !== "Automatic balanced defaults") throw new Error("Unknown criteria choice.");
+      // Capture once at the consultation boundary, not when the editor opened.
+      const current = consultation.capture();
+      const captured = consultationOptions(current.model, current.thinking);
+      verifyProviderCap(String(captured.model.provider), modelRegistry ?? {});
+      const identity = `${captured.model.provider}/${captured.model.id}`;
+      const fresh = await loadAvailable(modelRegistry);
+      const request = buildBalanceRequest({
+        models: balanceAvailableModels(fresh.models),
+        roles: agents.map(role => ({ role, description: role === "orchestrator"
+          ? "Coordinate task planning and implementation decisions."
+          : /review|judge/.test(role) ? "Independently assess correctness and implementation risks."
+          : "Perform the assigned development or verification role with appropriate effort." })),
+        reference, current: { model: identity, thinking: current.thinking }, criteria,
+      });
+      const consent = await ui.confirm("Consult current Pi model?", [
+        `One consultation using CURRENT ${identity} (thinking ${current.thinking}); provider ${captured.model.provider}. Possible provider cost.`,
+        "Sent data: allowlisted available model identities/names/reasoning capabilities; reference role assignments and fixed descriptions; priority and optional task/risk criteria; current model identity and thinking.",
+        "No chat history, source, system prompts from your session, or credentials are sent as prompt data. Normal provider authentication is handled by Pi.",
+        "No fallback or retry. Advisory recommendations, not benchmark evidence. Nothing is saved or activated by consultation.",
+      ].join("\n"));
+      if (!consent) return { wrote: false, cancelled: true };
+      await assertRegistryUnchanged(registry.originalFiles);
+      const proposal = await consultBalance(request, captured, consultation);
+      await assertRegistryUnchanged(registry.originalFiles);
+      const preview = ["Advisory proposal; no benchmark claims. Active profile remains unchanged.",
+        ...proposal.diff.map(row => `${row.role}: ${row.before.model} (${row.before.thinking}) -> ${row.after.model} (${row.after.thinking})\nRationale: ${row.rationale}`)].join("\n");
+      if (!await ui.confirm("Balance preview — continue to named save?", preview)) return { wrote: false, cancelled: true };
+      // Re-prompt on invalid names: the validated proposal was already paid for, so never re-infer.
+      let name: string | undefined;
+      while (true) {
+        name = await ui.input("New balanced profile name", "lowercase-name");
+        if (!name) return { wrote: false, cancelled: true };
+        const nameError = validateNewProfileName(name, registry.manifest, paths) ??
+          (await exists(join(paths.gentleDir, `models.${name}.json`)) ? `Profile file models.${name}.json already exists.` : undefined);
+        if (!nameError) break;
+        ui.notify(`Invalid profile name '${name}': use an unused safe lowercase name starting with a letter (a-z, 0-9, single '-' or '.' separators). ${nameError}`, "error");
+      }
+      if (!await ui.confirm("Save profile?", `Write new profile ${name} based on ${referenceName}. Active profile will not change.`)) return { wrote: false, cancelled: true };
+      // Refresh both identities and capabilities after the final confirmation.
+      const finalCatalog = await loadAvailable(modelRegistry);
+      for (const agent of agents) {
+        const entry = proposal.mapping[agent];
+        const model = balanceAvailableModels(finalCatalog.models).find(model => model.model === entry.model);
+        if (!model || !supportedThinking(model).includes(entry.thinking)) throw new Error("Balance model or thinking became unavailable; nothing was written.");
+      }
+      const profile = validateNamedProfile(proposal.mapping, registry.manifest, name);
+      const nextManifest = validateManifest({ ...registry.manifest,
+        profiles: [...registry.manifest.profiles, { name, modelsFile: `models.${name}.json` }] });
+      await persistProfile({ paths, name, profile, manifest: nextManifest, originalFiles: registry.originalFiles, register: true, io });
+      ui.notify(`Saved profile ${name}. Active profile was not changed.`, "info");
+      return { wrote: true, cancelled: false };
+    } catch (error) {
+      // Provider errors can contain sensitive request/authentication details.
+      const message = error instanceof Error && /^(Invalid balance|Balance |Profile configuration changed|Profile name|Profile file)/.test(error.message)
+        ? error.message : "Balance consultation failed or is unavailable; nothing was written. No retry.";
+      ui.notify(message, "error");
+      return { wrote: false, cancelled: false };
+    }
   }
 
   if (action === MENU_EDIT) {

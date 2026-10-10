@@ -78,7 +78,10 @@ Expected result:
 - Pi recognizes `/jb-odd-models`.
 - `status` shows `openaigentle` by default, another registered profile, or intentionally `custom`.
 - `doctor` reports healthy managed mappings or actionable diagnostics.
-- `/jb-odd-models edit` can view profiles without a catalog. Editing or creating needs `npm run export:model-catalog` first; reinstall to copy `config/model-catalog.json`, or copy that file to `$PI_HOME/gentle-ai/model-catalog.json`.
+- `/jb-odd-models edit` can view saved profiles without a model registry or catalog. Edit/Create use all auth-available models in the invoking Pi registry, not the session-scoped subset; no export is required. A missing, empty, invalid, or failing registry blocks Edit/Create without writes or a file-catalog fallback.
+- Saving a named profile does not activate it. Select it separately with `/jb-odd-models <profile>`.
+
+`npm run export:model-catalog` remains optional for inspection/headless tooling. Reinstall to copy a generated `config/model-catalog.json` into `$PI_HOME/gentle-ai/model-catalog.json`, or copy it there yourself; interactive editing does not consult it. Registry availability is local auth/configuration evidence, not proof of provider reachability or account entitlement.
 
 ## Common recovery path
 

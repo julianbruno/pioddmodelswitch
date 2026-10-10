@@ -67,7 +67,11 @@ export type ValidatedModelProfile = Record<string, ModelProfileEntry>;
 export type RuntimeModelProfiles = Record<string, RuntimeModelProfileEntry>;
 
 const safeNamePattern = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
-const providerModelPattern = /^[^/\s]+\/[^/\s]+$/;
+export function isModelIdentifier(value: string): boolean {
+  const separator = value.indexOf("/");
+  // The first slash separates the provider; the remainder is the verbatim Pi model ID.
+  return separator > 0 && separator < value.length - 1 && !/\s/.test(value);
+}
 const builtInReservedCommandSet = new Set<string>(RESERVED_COMMAND_NAMES);
 const knownOppositeProviderJudgeSet = new Set<string>(KNOWN_OPPOSITE_PROVIDER_JUDGES);
 const retiredManagedAgentSet = new Set<string>(RETIRED_MANAGED_AGENTS);
@@ -287,7 +291,7 @@ function validateEntry(value: unknown, label: string): ModelProfileEntry {
   const model = assertString(object.model, `${label}.model`);
   const thinking = assertString(object.thinking, `${label}.thinking`);
 
-  if (model !== model.trim() || !providerModelPattern.test(model)) {
+  if (model !== model.trim() || !isModelIdentifier(model)) {
     fail(`${label}.model must be a non-empty provider/model identifier.`);
   }
   if (!thinking || thinking !== thinking.trim()) {

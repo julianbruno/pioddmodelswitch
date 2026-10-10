@@ -84,7 +84,9 @@ If Pi does not recognize the command, verify that Gentle Pi loads TypeScript ext
 
 ## Add or install a third profile
 
-The manifest is the source of truth. To add a profile such as `local`, add it to `model-profiles.manifest.json`, create `models.local.json`, and include exactly the same active managed agents as the existing profiles, including configured judge/reviewer agents. Then reinstall so the new manifest/profile file is copied into Pi home. A profile without an `oppositeProviderJudges.profilePairs` entry uses its own models for judges.
+For installed profiles, prefer `/jb-odd-models edit`: Create clones a registered template and offers all auth-available models from the invoking Pi registry, without requiring an exported catalog. Save updates the named definition and registers it, but does not activate it; select `/jb-odd-models <profile>` separately. View needs no model availability. Missing, empty, invalid, or failing registry evidence blocks Edit/Create without writes or a stale-catalog fallback. Availability does not prove provider reachability or account entitlement. See [editor behavior and optional catalog export](USAGE.md#edit-or-create-a-named-profile).
+
+For packaged profiles, the manifest is the source of truth. To add a profile such as `local`, add it to `model-profiles.manifest.json`, create `models.local.json`, and include exactly the same active managed agents as the existing profiles, including configured judge/reviewer agents. Then reinstall so the new manifest/profile file is copied into Pi home. A profile without an `oppositeProviderJudges.profilePairs` entry uses its own models for judges.
 
 After reinstalling, verify:
 

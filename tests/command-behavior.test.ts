@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import test from "node:test";
 
-import oddModelProfiles from "../extensions/odd-model-profiles.ts";
+import oddModelProfiles, { balanceProgress } from "../extensions/odd-model-profiles.ts";
 import { RETIRED_MANAGED_AGENTS } from "../extensions/model-profiles/core.ts";
 import { inspectModelProfileTransactions } from "../extensions/model-profiles/transaction.ts";
 
@@ -25,8 +25,52 @@ type FakeCommandContext = {
   };
   reload(): Promise<void>;
   model?: { provider: string; id: string };
-  modelRegistry: { find(provider: string, id: string): unknown };
+  scopedModels?: unknown[];
+  modelRegistry: { find(provider: string, id: string): unknown; getAvailable?(): unknown; getError?(): string | undefined };
 };
+
+for (const mode of ["success", "cancel", "error"]) test(`Balance loader ${mode} disposes UI and listeners`, async () => {
+  let loader: any;
+  let disposed = 0, removed = 0, doneCount = 0;
+  class FakeLoader {
+    controller = new AbortController();
+    signal = this.controller.signal;
+    onAbort?: () => void;
+    constructor() {
+      loader = this;
+      const remove = this.signal.removeEventListener.bind(this.signal);
+      this.signal.removeEventListener = (...args) => { removed++; return remove(...args); };
+    }
+    dispose() { disposed++; }
+  }
+  const ui = { custom: (factory: any) => new Promise(resolve => {
+    const component = factory({}, {}, {}, (value: unknown) => {
+      doneCount++;
+      component.dispose();
+      resolve(value);
+    });
+  }) };
+  let signal: AbortSignal | undefined;
+  const pending = balanceProgress(ui as any, async current => {
+    signal = current;
+    if (mode === "error") throw new Error("provider");
+    if (mode === "cancel") {
+      return new Promise((_resolve, reject) => current.addEventListener("abort", () => reject(new Error("cancelled")), { once: true }));
+    }
+    return "proposal";
+  }, async () => FakeLoader as any);
+  // Let the loader and work begin, then exercise its actual cancellation hook.
+  await Promise.resolve();
+  await Promise.resolve();
+  if (mode === "cancel") loader.onAbort();
+  if (mode === "success") assert.equal(await pending, "proposal");
+  else await assert.rejects(pending, mode === "cancel" ? /cancelled/ : /provider/);
+  assert.equal(doneCount, 1);
+  assert.equal(disposed, 1);
+  assert.equal(removed, 1);
+  assert.equal(loader.onAbort, undefined);
+  assert.equal(signal?.aborted, true);
+});
 
 const normalAgents = ["orchestrator", "gentle-ai-explore", "gentle-ai-verify", "jd-fix-agent", "gentle-ai-worker"];
 const judgeAgents = ["review-risk", "review-resilience", "review-readability", "review-reliability", "jd-judge-a", "jd-judge-b"];
@@ -156,6 +200,69 @@ async function createHarness() {
   };
 }
 
+test("status separates shared persisted sources from the invoking live orchestrator", async () => {
+  const h = await createHarness();
+  await h.pi.setModel({ provider: "local", id: "orchestrator" });
+  h.pi.setThinkingLevel("medium");
+  const runtime = await readJson(h.runtimePath);
+  runtime.model_profiles.orchestrator = { model: "xai/orchestrator", effort: "xhigh" };
+  await writeJson(h.runtimePath, runtime);
+  const before = await snapshotTree(h.root);
+  for (const action of ["", "status"]) {
+    await h.command.handler(action, h.ctx);
+    const text = h.notifications.at(-1)!.message;
+    assert.match(text, /Scope: shared persisted configuration/);
+    assert.ok(text.includes(`Canonical source: ${h.canonicalPath}`));
+    assert.ok(text.includes(`Runtime source: ${h.runtimePath}`));
+    assert.match(text, /orchestrator: openai-codex\/orchestrator \(high\).*runtime xai\/orchestrator \(xhigh\).*\[misaligned\]/);
+    assert.match(text, /Invoking live orchestrator: local\/orchestrator \(medium\)/);
+    assert.match(text, /Live vs canonical: mismatch; live vs runtime: mismatch/);
+    assert.match(text, /Other sessions are not observed; refresh timing is not guaranteed/);
+  }
+  assert.deepEqual(await snapshotTree(h.root), before);
+  assert.equal(h.reloadCount(), 0);
+});
+
+test("status keeps live evidence when saved state or live model is unavailable", async () => {
+  const h = await createHarness();
+  await writeFile(h.canonicalPath, "{invalid");
+  await h.command.handler("status", h.ctx);
+  assert.match(h.notifications.at(-1)!.message, /Persisted ODD profile: unknown/);
+  assert.match(h.notifications.at(-1)!.message, /Invoking live orchestrator: openai-codex\/orchestrator \(high\)/);
+  Object.defineProperty(h.ctx, "model", { value: undefined });
+  await h.command.handler("", h.ctx);
+  assert.match(h.notifications.at(-1)!.message, /Invoking live orchestrator: unavailable \(thinking high\)/);
+  assert.match(h.notifications.at(-1)!.message, /Live vs canonical: unknown; live vs runtime: unknown/);
+});
+
+test("status detects thinking-only mismatch and reports aligned or unavailable live evidence", async () => {
+  const h = await createHarness();
+  const before = await snapshotTree(h.root);
+  await h.command.handler("status", h.ctx);
+  assert.match(h.notifications.at(-1)!.message, /Live vs canonical: match; live vs runtime: match/);
+  h.pi.setThinkingLevel("medium");
+  await h.command.handler("status", h.ctx);
+  assert.match(h.notifications.at(-1)!.message, /Live vs canonical: mismatch; live vs runtime: mismatch/);
+  Object.defineProperty(h.ctx, "model", { value: undefined });
+  await h.command.handler("status", h.ctx);
+  assert.match(h.notifications.at(-1)!.message, /Persisted ODD profile: openai/);
+  assert.match(h.notifications.at(-1)!.message, /Live vs canonical: unknown; live vs runtime: unknown/);
+  assert.deepEqual(await snapshotTree(h.root), before);
+});
+
+test("switch notices distinguish shared changes, caller reload, and file no-op", async () => {
+  const h = await createHarness();
+  await h.command.handler("local", h.ctx);
+  const changed = h.notifications.at(-1)!.message;
+  assert.ok(changed.includes(`Shared files changed: ${h.canonicalPath}; ${h.runtimePath}`));
+  assert.match(changed, /Only the invoking session reloads/);
+  await h.pi.setModel({ provider: "openai-codex", id: "orchestrator" });
+  h.pi.setThinkingLevel("high");
+  await h.command.handler("local", h.ctx);
+  assert.match(h.notifications.at(-1)!.message, /shared files unchanged; invoking live orchestrator aligned; no reload needed/);
+  assert.equal(h.reloadCount(), 1);
+});
+
 test("direct selection aligns the session, including file no-op and complete no-op", async () => {
   const h = await createHarness();
   await h.command.handler("local", h.ctx);
@@ -217,7 +324,7 @@ test("reload failure keeps switched files and aligned session without compensati
   assert.deepEqual((await readJson(h.canonicalPath)).orchestrator, { model: "local/orchestrator", thinking: "medium" });
   assert.deepEqual((await readJson(h.runtimePath)).model_profiles.orchestrator, { model: "local/orchestrator", effort: "medium" });
   assert.equal(h.notifications.at(-1)?.level, "error");
-  assert.match(h.notifications.at(-1)?.message ?? "", /reload unavailable.*files and current session remain active.*\/reload manually or restart Pi/s);
+  assert.match(h.notifications.at(-1)?.message ?? "", /reload unavailable.*shared persisted state remains applied.*invoking live orchestrator remains aligned.*\/reload manually or restart Pi/s);
 });
 
 test("model change reapplies thinking even when target equals previous thinking", async () => {
@@ -359,7 +466,7 @@ test("status, preview, and switch use opposite-provider mappings for configured 
   const harness = await createHarness();
 
   await harness.command.handler("status", harness.ctx);
-  assert.match(harness.notifications.at(-1)?.message ?? "", /Active ODD profile: openai/);
+  assert.match(harness.notifications.at(-1)?.message ?? "", /Persisted ODD profile: openai/);
   assert.match(harness.notifications.at(-1)?.message ?? "", /review-risk: xai\/review-risk \(xhigh\)/);
 
   await harness.command.handler("preview grok", harness.ctx);
@@ -376,7 +483,7 @@ test("status, preview, and switch use opposite-provider mappings for configured 
   assert.deepEqual(runtime.model_profiles["review-risk"], { model: "openai-codex/review-risk", effort: "high" });
 
   await harness.command.handler("status", harness.ctx);
-  assert.match(harness.notifications.at(-1)?.message ?? "", /Active ODD profile: grok/);
+  assert.match(harness.notifications.at(-1)?.message ?? "", /Persisted ODD profile: grok/);
 });
 
 test("fresh aligned switch leaves complete fixture tree unchanged with no history", async () => {
@@ -456,6 +563,23 @@ test("undo command and completions use transaction history through the command s
   assert.match(harness.notifications.at(-1)?.message ?? "", /undone/i);
   assert.deepEqual((await readJson(harness.canonicalPath))["gentle-ai-explore"], { model: "openai-codex/gentle-ai-explore", thinking: "high" });
   assert.deepEqual((await readJson(harness.runtimePath)).model_profiles["gentle-ai-explore"], { model: "openai-codex/gentle-ai-explore", effort: "high" });
+});
+
+test("undo reload failure keeps undone shared files and reports live alignment as not established", async () => {
+  const harness = await createHarness();
+  await harness.command.handler("grok", harness.ctx);
+  let reloads = 0;
+  harness.ctx.reload = async () => { reloads++; throw new Error("reload unavailable"); };
+
+  await harness.command.handler("undo", harness.ctx);
+
+  assert.equal(reloads, 1);
+  assert.equal(harness.notifications.at(-1)?.level, "error");
+  assert.match(harness.notifications.at(-1)?.message ?? "", /reload unavailable.*shared undo files remain applied.*live orchestrator alignment is not established.*\/reload manually or restart Pi/s);
+  assert.deepEqual((await readJson(harness.canonicalPath))["gentle-ai-explore"], { model: "openai-codex/gentle-ai-explore", thinking: "high" });
+  assert.deepEqual((await readJson(harness.runtimePath)).model_profiles["gentle-ai-explore"], { model: "openai-codex/gentle-ai-explore", effort: "high" });
+  // Undo restores files only; the live session stays on the previously switched model.
+  assert.deepEqual(harness.session(), { model: { provider: "xai", id: "orchestrator" }, thinking: "xhigh" });
 });
 
 test("semantic no-op switch leaves transaction history bytes and reload count unchanged", async () => {
@@ -587,6 +711,88 @@ test("recover command finishes a real interrupted active switch through the comm
   assert.equal(harness.reloadCount(), 1);
   assert.match(harness.notifications.at(-1)?.message ?? "", /recovery finished/i);
   assert.deepEqual((await readJson(harness.runtimePath)).model_profiles["gentle-ai-explore"], { model: "xai/gentle-ai-explore", effort: "xhigh" });
+});
+
+test("recover reload failure keeps recovered shared files and reports live alignment as not established", async () => {
+  const harness = await createHarness();
+  const script = `
+    import { runModelProfileTransaction } from ${JSON.stringify(new URL("../extensions/model-profiles/transaction.ts", import.meta.url).href)};
+    await runModelProfileTransaction(${JSON.stringify({ canonicalPath: harness.canonicalPath, runtimePath: harness.runtimePath, journalDir: harness.journalDir })}, {
+      operation: "switch",
+      plan: () => ({
+        canonicalContent: ${JSON.stringify(`${JSON.stringify({ ...profile("xai", "xhigh"), unmanagedCanonical: { model: "keep/me", thinking: "low" } }, null, 2)}\n`)},
+        runtimeContent: ${JSON.stringify(`${JSON.stringify({ model_profiles: { ...Object.fromEntries(agents.map((agent) => [agent, { model: `xai/${agent}`, effort: "xhigh" }])), unrelatedAgent: { model: "keep/runtime", effort: "low" } }, unrelatedTopLevel: true }, null, 2)}\n`)},
+      }),
+      faultHook: (event) => { if (event === "after-replace:canonical") process.exit(46); },
+    });
+  `;
+  const child = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "--eval", script], { encoding: "utf8" });
+  assert.equal(child.status, 46, child.stderr);
+  let reloads = 0;
+  harness.ctx.reload = async () => { reloads++; throw new Error("reload unavailable"); };
+
+  await harness.command.handler("recover", harness.ctx);
+
+  assert.equal(reloads, 1);
+  assert.equal(harness.notifications.at(-1)?.level, "error");
+  assert.match(harness.notifications.at(-1)?.message ?? "", /reload unavailable.*recovered shared profile files remain applied.*live orchestrator alignment is not established.*\/reload manually or restart Pi/s);
+  assert.deepEqual((await readJson(harness.runtimePath)).model_profiles["gentle-ai-explore"], { model: "xai/gentle-ai-explore", effort: "xhigh" });
+  // Recovery touches files only; the live session is not realigned.
+  assert.deepEqual(harness.session(), { model: { provider: "openai-codex", id: "orchestrator" }, thinking: "high" });
+});
+
+test("registered editor uses all invoking live models, not scoped models, and saves without activation", async () => {
+  const h = await createHarness();
+  const saved = await readJson(join(h.gentleDir, "models.openai.json"));
+  const live = Object.values(saved).map((entry: any) => {
+    const slash = entry.model.indexOf("/");
+    return { provider: entry.model.slice(0, slash), id: entry.model.slice(slash + 1), name: entry.model, reasoning: true };
+  });
+  live.push({ provider: "custom", id: "only-live", name: "Custom live", reasoning: true });
+  h.ctx.scopedModels = [];
+  let calls = 0;
+  h.ctx.modelRegistry.getAvailable = function () { assert.equal(this, h.ctx.modelRegistry); calls++; return live; };
+  const beforeCanonical = await readFile(h.canonicalPath, "utf8");
+  const beforeRuntime = await readFile(h.runtimePath, "utf8");
+  let step = 0;
+  h.ctx.ui.select = async (_title, options) => {
+    step++;
+    if (step === 1) return "Edit";
+    if (step === 2) return "openai";
+    if (step === 3) return options.find((value) => value.startsWith("orchestrator:"));
+    if (step === 4) {
+      assert.deepEqual(new Set(options), new Set(live.map((model) => `${model.provider}/${model.id} — ${model.name}`)));
+      return "custom/only-live — Custom live";
+    }
+    if (step === 5) return "low";
+    return "Save";
+  };
+  h.ctx.ui.input = async () => undefined;
+  h.ctx.ui.confirm = async () => true;
+  await h.command.handler("edit", h.ctx);
+  assert.equal(calls, 1);
+  assert.match(h.notifications.at(-1)?.message ?? "", /Saved profile openai/);
+  assert.deepEqual((await readJson(join(h.gentleDir, "models.openai.json"))).orchestrator, { model: "custom/only-live", thinking: "low" });
+  assert.equal(await readFile(h.canonicalPath, "utf8"), beforeCanonical);
+  assert.equal(await readFile(h.runtimePath, "utf8"), beforeRuntime);
+  assert.deepEqual(h.modelCalls, []);
+  assert.deepEqual(h.thinkingCalls, []);
+  assert.equal(h.reloadCount(), 0);
+});
+
+test("nested Pi model IDs survive activation lookup and active-state validation", async () => {
+  const h = await createHarness();
+  const custom = profile("custom", "high");
+  custom.orchestrator.model = "custom/vendor/family/model";
+  await writeJson(join(h.gentleDir, "models.local.json"), custom);
+  const lookups: string[][] = [];
+  h.ctx.modelRegistry.find = (provider, id) => { lookups.push([provider, id]); return { provider, id }; };
+  await h.command.handler("local", h.ctx);
+  assert.ok(lookups.some(([provider, id]) => provider === "custom" && id === "vendor/family/model"));
+  assert.equal((await readJson(h.canonicalPath)).orchestrator.model, "custom/vendor/family/model");
+  assert.equal((await readJson(h.runtimePath)).model_profiles.orchestrator.model, "custom/vendor/family/model");
+  await h.command.handler("status", h.ctx);
+  assert.match(h.notifications.at(-1)?.message ?? "", /Persisted ODD profile: local/);
 });
 
 test("edit subcommand opens the profile editor without applying the active profile", async () => {

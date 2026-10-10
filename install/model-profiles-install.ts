@@ -48,7 +48,7 @@ type Plan = {
 
 const configMode = 0o600;
 const extensionMode = 0o644;
-const helperFiles = ["core.ts", "transaction.ts", "catalog.ts", "editor.ts"];
+const helperFiles = ["core.ts", "transaction.ts", "catalog.ts", "editor.ts", "balancing.ts"];
 const extensionFile = "odd-model-profiles.ts";
 // Migration-only: the predecessor entrypoint registered the retired command. It is moved into the
 // install backup only when its bytes equal a released package version (SHA-256 of commits 484fd80,

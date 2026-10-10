@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import {
   deriveCanonicalProfileForSelection,
@@ -10,6 +10,7 @@ import {
   deriveRuntimeModelProfilesForSelection,
   hasRetiredManagedAgents,
   isJsonObject,
+  isModelIdentifier,
   managedAgents,
   registeredProfileNames,
   RETIRED_MANAGED_AGENTS,
@@ -62,7 +63,6 @@ type ProfileRuntimeState = {
 
 const COMMAND_NAME = "jb-odd-models";
 const STATIC_ACTIONS = ["status", "list", "preview", "doctor", "undo", "recover", "edit"] as const;
-const providerModelPattern = /^[^/\s]+\/[^/\s]+$/;
 const hasOwn = Object.prototype.hasOwnProperty;
 
 function hasOwnKey(value: JsonObject, key: string): boolean {
@@ -150,7 +150,7 @@ function exactKeys(value: JsonObject, expected: readonly string[], label: string
 }
 
 function validateModel(value: unknown, label: string): string {
-  if (typeof value !== "string" || value !== value.trim() || !providerModelPattern.test(value)) {
+  if (typeof value !== "string" || value !== value.trim() || !isModelIdentifier(value)) {
     throw new Error(`${label} must be a non-empty provider/model identifier.`);
   }
   return value;
@@ -258,7 +258,31 @@ function profileMatchesState(state: ProfileRuntimeState, profile: ValidatedModel
   return true;
 }
 
-async function statusText(paths: ResolvedPaths, includeUsage = false): Promise<string> {
+function scopeText(paths: ResolvedPaths): string[] {
+  return [
+    "Scope: shared persisted configuration (not session-local).",
+    `Canonical source: ${paths.canonicalPath}`,
+    `Runtime source: ${paths.runtimePath} (persisted model_profiles, not live agents)`,
+    "Other sessions are not observed; refresh timing is not guaranteed.",
+  ];
+}
+
+function liveStatusText(model: DoctorCommandContext["model"], thinking: string, state?: ProfileRuntimeState): string[] {
+  const identifier = model ? `${model.provider}/${model.id}` : undefined;
+  const canonical = state?.canonicalEntries.orchestrator;
+  const runtime = state?.runtimeEntries.orchestrator;
+  const compare = (entry: ModelProfileEntry | RuntimeModelProfileEntry | undefined): string => {
+    if (!identifier || !entry) return "unknown";
+    const effort = "thinking" in entry ? entry.thinking : entry.effort;
+    return identifier === entry.model && thinking === effort ? "match" : "mismatch";
+  };
+  return [
+    `Invoking live orchestrator: ${identifier ? `${identifier} (${thinking})` : `unavailable (thinking ${thinking})`} [source: ctx.model + pi.getThinkingLevel()]`,
+    `Live vs canonical: ${compare(canonical)}; live vs runtime: ${compare(runtime)}`,
+  ];
+}
+
+async function statusText(paths: ResolvedPaths, model: DoctorCommandContext["model"], thinking: string, includeUsage = false): Promise<string> {
   let manifest: ModelProfilesManifest | undefined;
   try {
     const registry = await loadRegistry(paths);
@@ -273,13 +297,13 @@ async function statusText(paths: ResolvedPaths, includeUsage = false): Promise<s
 
     const mapping = managedAgents(registry.manifest).map((agent) => {
       const source = state.canonicalEntries[agent]!;
-      const live = state.runtimeEntries[agent]!;
-      const drift = source.model === live.model && source.thinking === live.effort ? "" : " [misaligned]";
-      return `${agent}: ${source.model} (${source.thinking})${drift}`;
+      const runtime = state.runtimeEntries[agent]!;
+      const drift = source.model === runtime.model && source.thinking === runtime.effort ? "" : " [misaligned]";
+      return `${agent}: ${source.model} (${source.thinking}) [canonical]; runtime ${runtime.model} (${runtime.effort})${drift}`;
     });
-    return [includeUsage ? usage(registry.manifest) : "", `Active ODD profile: ${active}`, ...mapping].filter(Boolean).join("\n");
+    return [includeUsage ? usage(registry.manifest) : "", ...scopeText(paths), `Persisted ODD profile: ${active}`, `Active ODD profile: ${active} (shared persisted mapping; not live session)`, ...liveStatusText(model, thinking, state), ...mapping].filter(Boolean).join("\n");
   } catch (error) {
-    return [includeUsage ? usage(manifest) : "", "Active ODD profile: unknown", error instanceof Error ? error.message : String(error)]
+    return [includeUsage ? usage(manifest) : "", ...scopeText(paths), "Persisted ODD profile: unknown", "Active ODD profile: unknown (shared persisted mapping; not live session)", ...liveStatusText(model, thinking), error instanceof Error ? error.message : String(error)]
       .filter(Boolean)
       .join("\n");
   }
@@ -608,16 +632,47 @@ function parseArgs(args: string): { kind: "status" | "list" | "doctor" | "undo" 
   return { kind: "unknown", value: tokens.join(" ") };
 }
 
+// Factory injection keeps terminal lifecycle tests offline; production uses Pi's
+// installed loader, which ctx.ui.custom disposes when done resolves the dialog.
+export async function balanceProgress<T>(
+  ui: ExtensionContext["ui"],
+  work: (signal: AbortSignal) => Promise<T>,
+  load = async () => (await import("@earendil-works/pi-coding-agent")).BorderedLoader,
+): Promise<T> {
+  const Loader = await load();
+  const result = await ui.custom<{ value: T } | { error: unknown }>((tui, theme, _kb, done) => {
+    const loader = new Loader(tui, theme, "Consulting current model — Escape to cancel");
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    loader.onAbort = onAbort;
+    loader.signal.addEventListener("abort", onAbort, { once: true });
+    if (loader.signal.aborted) controller.abort();
+    // Promise wrapping also cleans up when work throws synchronously.
+    Promise.resolve().then(() => work(controller.signal)).then(
+      value => { cleanup(); done({ value }); },
+      error => { cleanup(); done({ error }); },
+    );
+    function cleanup() {
+      loader.signal.removeEventListener("abort", onAbort);
+      loader.onAbort = undefined;
+      controller.abort();
+    }
+    return loader;
+  });
+  if ("error" in result) throw result.error;
+  return result.value;
+}
+
 export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfileExtensionOptions = {}): void {
   const paths = resolvePaths(options);
 
   pi.registerCommand(COMMAND_NAME, {
-    description: "Show, preview, edit, or change the global ODD model profile.",
+    description: "Show shared persisted ODD mappings and the invoking live orchestrator, or change the shared profile.",
     getArgumentCompletions: (prefix: string) => completionItems(paths, prefix),
     handler: async (args, ctx) => {
       const parsed = parseArgs(args);
       if (parsed.kind === "status") {
-        ctx.ui.notify(await statusText(paths, String(args ?? "").trim() === ""), "info");
+        ctx.ui.notify(await statusText(paths, ctx.model, pi.getThinkingLevel(), String(args ?? "").trim() === ""), "info");
         return;
       }
       if (parsed.kind === "list") {
@@ -645,7 +700,7 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
       if (parsed.kind === "undo") {
         try {
           await undoLastModelProfileTransaction(transactionTargets(paths));
-          ctx.ui.notify("Last ODD model profile transaction undone. Reloading Pi...", "info");
+          ctx.ui.notify("Last ODD model profile transaction undone in shared persisted configuration. Only the invoking session reloads; live orchestrator alignment is not established by undo. Other sessions are not observed; refresh timing is not guaranteed. Reloading Pi...", "info");
         } catch (error) {
           ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
           return;
@@ -654,7 +709,7 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
           await ctx.reload();
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error);
-          ctx.ui.notify(`Reload failed (${detail}), but the undo files remain active. Run /reload manually or restart Pi.`, "error");
+          ctx.ui.notify(`Reload failed (${detail}), but the shared undo files remain applied; live orchestrator alignment is not established. Run /reload manually or restart Pi.`, "error");
         }
         return;
       }
@@ -670,12 +725,12 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
           ctx.ui.notify("No model profile transaction needs recovery.", "info");
           return;
         }
-        ctx.ui.notify(`Model profile transaction recovery ${result}. Reloading Pi...`, "info");
+        ctx.ui.notify(`Model profile transaction recovery ${result} in shared persisted configuration. Only the invoking session reloads; live orchestrator alignment is not established by recovery. Other sessions are not observed; refresh timing is not guaranteed. Reloading Pi...`, "info");
         try {
           await ctx.reload();
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error);
-          ctx.ui.notify(`Reload failed (${detail}), but recovered profile files remain active. Run /reload manually or restart Pi.`, "error");
+          ctx.ui.notify(`Reload failed (${detail}), but recovered shared profile files remain applied; live orchestrator alignment is not established. Run /reload manually or restart Pi.`, "error");
         }
         return;
       }
@@ -690,7 +745,15 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
             gentleDir: paths.gentleDir,
             manifestPath: paths.manifestPath,
             catalogPath: join(paths.gentleDir, "model-catalog.json"),
-          });
+          }, undefined, ctx.modelRegistry, ctx.mode === "tui" ? {
+            capture: () => ({ model: ctx.model, thinking: pi.getThinkingLevel() }),
+            streamSimple: (model, context, options) => ctx.modelRegistry.streamSimple(
+              model as Parameters<typeof ctx.modelRegistry.streamSimple>[0],
+              context as Parameters<typeof ctx.modelRegistry.streamSimple>[1],
+              options as Parameters<typeof ctx.modelRegistry.streamSimple>[2],
+            ),
+            progress: work => balanceProgress(ctx.ui, work),
+          } : undefined);
         } catch (error) {
           ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
         }
@@ -747,7 +810,7 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
           if (pi.getThinkingLevel() !== entry.thinking) throw new Error(`Pi thinking readback differs from ${entry.thinking} (possibly clamped).`);
           const result = await switchProfile(paths, parsed.name);
           if (result === "noop") {
-            ctx.ui.notify(`ODD ${parsed.name} profile is already active; no reload needed.`, "info");
+            ctx.ui.notify(`ODD ${parsed.name} profile is already active in shared persisted configuration; shared files unchanged; invoking live orchestrator aligned; no reload needed. Other sessions are not observed; refresh timing is not guaranteed.`, "info");
             return;
           }
         } catch (error) { await restore(error); }
@@ -756,14 +819,14 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
         return;
       }
 
-      ctx.ui.notify(`ODD ${parsed.name} profile activated. Reloading Pi...`, "info");
+      ctx.ui.notify(`ODD ${parsed.name} profile activated in shared persisted configuration. Shared files changed: ${paths.canonicalPath}; ${paths.runtimePath}. Invoking live orchestrator aligned. Only the invoking session reloads. Other sessions are not observed; refresh timing is not guaranteed. Reloading Pi...`, "info");
       try {
         await ctx.reload();
         return;
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(
-          `Reload failed (${detail}), but the ${parsed.name} profile files and current session remain active. Run /reload manually or restart Pi.`,
+          `Reload failed (${detail}), but the ${parsed.name} shared persisted state remains applied and the invoking live orchestrator remains aligned; no rollback was performed. Other sessions are not observed; refresh timing is not guaranteed. Run /reload manually or restart Pi.`,
           "error",
         );
       }

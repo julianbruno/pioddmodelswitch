@@ -178,6 +178,8 @@ test("fresh temp install copies manifest, registered profiles, extension helpers
   assert.equal(await exists(join(piHome, "agent", "extensions", "model-profiles", "transaction.ts")), true);
   assert.equal(await exists(join(piHome, "agent", "extensions", "model-profiles", "catalog.ts")), true);
   assert.equal(await exists(join(piHome, "agent", "extensions", "model-profiles", "editor.ts")), true);
+  // editor.ts imports balancing.ts; an omitted helper breaks the installed command.
+  assert.equal(await exists(join(piHome, "agent", "extensions", "model-profiles", "balancing.ts")), true);
   assert.equal(await exists(join(piHome, "agent", "extensions", "core.ts")), false);
   assert.equal(await exists(join(piHome, "gentle-ai", "model-catalog.json")), false);
   assert.equal(await exists(join(piHome, "backups")), false);

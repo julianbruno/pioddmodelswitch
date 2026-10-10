@@ -30,7 +30,7 @@ PI_HOME=/path/to/pi-home pi
 - [Quick installation](INSTALLATION.md)
 - [Installation and recovery](HOW_TO_INSTALL.md)
 - [Programmatic testing](TESTING.md)
-- [Command usage](USAGE.md) — `/jb-odd-models edit` views, edits, or creates named profiles from a generated model catalog (1.5.0).
+- [Command usage](USAGE.md) — `/jb-odd-models edit` views, edits, or creates named profiles from all auth-available models in the invoking Pi registry; no exported catalog is required. Saving does not activate the profile. Optional **Balance** asks the current Pi model once, after consent and with possible provider cost, for an advisory new profile; some current models, including Codex, are refused. See [Balance](USAGE.md#balance-a-profile-with-the-current-model).
 - [How switching works](MODEL_SWITCHING.md) — direct selection also aligns the current Pi session's orchestrator model and thinking (1.4.0).
 - [Architecture and limitations](ARCHITECTURE.md)
 - [Provenance caveat](NOTICE.md)

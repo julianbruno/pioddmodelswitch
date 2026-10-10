@@ -70,15 +70,16 @@ Recover only when the diagnostic says it is safe:
 
 ## Expected result
 
-After reinstalling and selecting `gpt-5.6-recommended`, Pi should use the default named profile from:
+After reinstalling and explicitly selecting `gpt-5.6-recommended`, Pi should use the example named profile from:
 
 ```text
 config/models.gpt-5.6-recommended.json
 ```
 
-That means:
+The packaged manifest default is `openaigentle`, not this example. With opposite-provider judges enabled, this selection takes reviewers and judges from the paired `grok-recommended` profile:
 
 | Role | Model | Effort |
 |---|---|---|
-| Reasoning agents | `openai-codex/gpt-5.6-sol` | `medium` |
-| Code agents | `openai-codex/gpt-5.6-terra` | `high` |
+| Reasoning agents (`gentle-ai-explore`, `gentle-ai-verify`, `orchestrator`) | `openai-codex/gpt-5.6-sol` | `medium` |
+| Code agents (`gentle-ai-worker`, `jd-fix-agent`) | `openai-codex/gpt-5.6-terra` | `high` |
+| Reviewers (`review-risk`, `review-resilience`, `review-readability`, `review-reliability`, `review-refuter`, `review-validator`) and judges (`jd-judge-a`, `jd-judge-b`) | `xai/grok-4.6` | `medium` |
