@@ -53,3 +53,9 @@ B1 writer mv1uxsxv-m-usbl added balancing.ts and19 deterministic tests only. Obs
 
 ## Final outcome and next step
 Authorized offline implementation complete on feat/model-profile-scope-waves; all B1–B4 verified. Tests and offline loader/adapter evidence remain scoped as above. No real provider/rendering/live registry/active-home installation/cost/token-accounting checks; no applicable compiler configured. RDD off; native ASSESS unavailable due untracked declaration, independent checks used instead. No commit/push/install performed. Small nonblocking doc wording noted: baseURL vs Pi baseUrl, function-config refusal not enumerated. W3–W5 end-to-end session isolation still blocked by missing upstream consumer seam, never faked. Next human decision: authorize installation and manual live smoke test with a supported capped current model; Codex consultation intentionally refused with no fallback. No automatic delivery.
+
+## Commit evidence
+- Work-unit commit: `a8a5a3e98ba133da86f639705e87f534a147b015`.
+- Boundary: Integrated shared-scope/editor/Balance implementation, tests and guides.
+- Fresh precommit full-tree verification: `npm test` 198/198; diff, untracked JSON and whitespace checks pass. Intermediate commit snapshots were not independently tested.
+- User accepted the integrated 2,499-line size exception and two implementation commits; no push. RDD off; live provider checks remain unverified.

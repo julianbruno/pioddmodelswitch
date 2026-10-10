@@ -19,3 +19,9 @@ tests/manifest-validation.test.ts
 
 ## Checks and evidence
 Scout mv2llbt6-12-rcde confirmed exact base and bridge Opus identities,pairing mechanism at core.ts353–360. Installer discovers manifest files automatically. Test-first RED then GREEN node --experimental-strip-types --test tests/manifest-validation.test.ts; npm test; git diff --check; untracked JSON whitespace. Fable independent19/19 focus196/196 full. No benchmark/reachability/thinking capability claims. Parent chosen role distribution within explicit3/3+judge split; no second product question needed. No commits authorized. Writer mv2m3ojo-13-657k completed three surfaces; exact4 model overrides/all13 base thinking retained, Fable/default/pairs unchanged. Native ASSESS unassessable untracked scope; independent H2 mv2m5s23-14-6lev PASS20/20 focused197/197 full, exact mixed canonical/runtime assignments. No live provider/install/activation check. Proceed queued Opus/GPT-judge creation; this profile complete uncommitted.
+
+## Commit evidence
+- Work-unit commit: `32881857f58c60327074598b02e9c920f9886118`.
+- Boundary: Three static presets, manifest registrations and parity regression tests.
+- Fresh precommit full-tree verification: `npm test` 198/198; diff, untracked JSON and whitespace checks pass. Intermediate commit snapshots were not independently tested.
+- User accepted the integrated 2,499-line size exception and two implementation commits; no push. RDD off; live provider checks remain unverified.

@@ -17,3 +17,9 @@ tests/manifest-validation.test.ts
 
 ## Evidence and next step
 Scout mv2lh64o-z-gke3 confirmed only reference config/models.claude-opus-5.5.json,13 roles,unpaired; installed-profile discovery reads manifest automatically. No installer/docs/version changes required. User model identity trusted as requested, not registry evidence. Parent checked git status; existing changes preserved. Writer mv2lj49u-10-ai0c added exact clone,manifest last entry,and matching/regression tests. Native ASSESS unassessable due untracked declarations; independent verifier mv2lkp3n-11-azqo PASS19/19 focused196/196 full, exact13-role model/thinking/canonical/runtime parity; default/pairs/version unchanged. Availability/reachability/medium-high provider support not verified. Profile created only, no install/activation/commit. Next: user-authorized installation/selection separately. Commit identities:none authorized.
+
+## Commit evidence
+- Work-unit commit: `32881857f58c60327074598b02e9c920f9886118`.
+- Boundary: Three static presets, manifest registrations and parity regression tests.
+- Fresh precommit full-tree verification: `npm test` 198/198; diff, untracked JSON and whitespace checks pass. Intermediate commit snapshots were not independently tested.
+- User accepted the integrated 2,499-line size exception and two implementation commits; no push. RDD off; live provider checks remain unverified.

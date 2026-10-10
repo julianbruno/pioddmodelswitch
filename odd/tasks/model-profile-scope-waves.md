@@ -39,3 +39,9 @@ Final W2 independent PASS observed:15/15 harness,27/27 command,114/114 full, dif
 
 ## Next step
 W1/W2 complete and verified; W3-W5 remain upstream-blocked. User separately authorized live-Pi-model profile TUI and project documentation; read-only scout active for new bounded feature. Update doc disposition to observed result and report W3-W5 upstream blockers honestly. Close all feasible repository work and clearly report upstream-blocked integration rather than claiming isolation. Preserve current changes; do not clean up or install unverified artifacts. Do not infer installed Gentle routing behavior from mocked consumers. W3 needs upstream consumer support or separately authorized upstream source integration; no installed-package patches. Complete and verify achievable waves individually, surface the dependency before expanding repositories, and do not claim all improvements complete.
+
+## Commit evidence
+- Work-unit commit: `a8a5a3e98ba133da86f639705e87f534a147b015`.
+- Boundary: Integrated shared-scope/editor/Balance implementation, tests and guides.
+- Fresh precommit full-tree verification: `npm test` 198/198; diff, untracked JSON and whitespace checks pass. Intermediate commit snapshots were not independently tested.
+- User accepted the integrated 2,499-line size exception and two implementation commits; no push. RDD off; live provider checks remain unverified.

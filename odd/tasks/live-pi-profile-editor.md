@@ -29,3 +29,9 @@ E2 doc writer changed README,INSTALLATION,HOW_TO_INSTALL,ARCHITECTURE,TESTING; r
 
 ## Next step
 E3 repairs independently verified by mv1uvyv1-l-qy2t. Fresh focused55/55 and full127/127 passed, no skips/failures, diff clean. Historical byte identity unproven (no baseline hashes); current functional checks freshly executed. Actual terminal/provider execution untested. Continue balancing B1. No commits authorized.
+
+## Commit evidence
+- Work-unit commit: `a8a5a3e98ba133da86f639705e87f534a147b015`.
+- Boundary: Integrated shared-scope/editor/Balance implementation, tests and guides.
+- Fresh precommit full-tree verification: `npm test` 198/198; diff, untracked JSON and whitespace checks pass. Intermediate commit snapshots were not independently tested.
+- User accepted the integrated 2,499-line size exception and two implementation commits; no push. RDD off; live provider checks remain unverified.
