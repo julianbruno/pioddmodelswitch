@@ -6,6 +6,8 @@
 
 Selection changes **shared persisted configuration**, not session-local routing. Sessions using the same target paths share `gentle-ai/models.json` and `agent/subagents.json`. Direct selection also aligns the invoking session's live orchestrator model and thinking, then reloads only that caller when files changed. It does not broadcast live model changes to other sessions.
 
+To use different profiles at the same time, run each instance in a separate Pi home with the lane scripts; see [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes).
+
 Status separates these sources:
 
 | Evidence | Meaning |

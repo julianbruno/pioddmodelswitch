@@ -4,7 +4,9 @@
 
 `/jb-odd-models <profile>` changes **shared model-routing configuration** and updates the **invoking Pi session**. It is not a session-isolated profile selector. Other Pi instances sharing the same `PI_HOME` can observe the saved routing, but the command does not broadcast a reload or replace their live conversation model.
 
-**Delivery state:** W1 scope/status notices are implemented and independently verified. W2 subprocess harness lifecycle repairs are implemented, but acceptance remains partial pending independent verification of the final artifacts. W3–W5 are blocked on a supported installed Gentle integration contract for both child and reviewer routing. No session isolation is implemented.
+**Delivery state:** W1 scope/status notices are implemented and independently verified. W2 subprocess harness lifecycle repairs are implemented, but acceptance remains partial pending independent verification of the final artifacts. W3–W5 are blocked on a supported installed Gentle integration contract for both child and reviewer routing. No session isolation is implemented within one Pi home.
+
+**Workaround:** home-level lanes are available. `scripts/setup-odd-lanes.sh`, `scripts/pi-opus.sh`, and `scripts/pi-gpt.sh` run two instances in separate homes with different profiles; see [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes). This is isolation by home, not session-local routing; W3–W5 remain blocked.
 
 **Recommendation:** retain the explicit shared-scope behavior while establishing upstream consumer support. Do not add automatic cross-terminal model switching or store an unused snapshot as a substitute for isolation.
 
@@ -20,7 +22,7 @@
 | Future subagent launches | May observe shared routing; exact refresh timing across all running-instance paths has not been live-tested. |
 | Running subagents | A saved routing change does not replace the model of a child already executing. |
 | Project configuration | Project-agent routing can use `<cwd>/.pi/subagents.json`, so effective routing can differ from shared user-agent routing. |
-| Different `PI_HOME` roots | This command targets different profile/runtime files; this alone is not proof that every upstream configuration surface is isolated. |
+| Different `PI_HOME` roots | Supported through the lane scripts. Each launcher also sets `PI_CODING_AGENT_DIR`, `GENTLE_PI_AGENT_HOME`, and `GENTLE_PI_CONFIG_HOME` into the lane home; otherwise Gentle applies the global `~/.pi/gentle-ai/models.json` at session start. Prompt history, skills, `/gentle:stats`, the Engram server, and the pi-pretty fff database stay shared. |
 | Reload failure | Persisted files and the invoking session remain active; the command requests manual `/reload` or restart. |
 
 ### Example: two terminals

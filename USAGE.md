@@ -6,6 +6,8 @@ The command reports, previews, diagnoses, switches, undoes, recovers, or edits t
 
 This is not a session-local profile selector. Sessions using the same configuration paths share the saved canonical and runtime mappings. Selecting a profile changes those shared files and aligns the invoking live orchestrator; only the caller reloads. Other sessions are not observed, and their refresh timing is not guaranteed. No live broadcast or independent session routing is provided.
 
+To use different profiles at the same time, run each instance in a separate Pi home with the lane scripts; see [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes).
+
 ## Command reference
 
 | Input | Effect |

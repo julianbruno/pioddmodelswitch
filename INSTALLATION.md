@@ -54,6 +54,8 @@ PI_HOME=/path/to/pi-home pi
 
 The target must already contain an `agent/` directory.
 
+With Gentle, a custom home also needs `PI_CODING_AGENT_DIR` and `GENTLE_PI_AGENT_HOME` set to `$PI_HOME/agent`, and `GENTLE_PI_CONFIG_HOME` set to `$PI_HOME/gentle-ai`; otherwise Pi and Gentle keep reading `~/.pi`. The lane launchers set all four; see [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes).
+
 ## Backups
 
 When an existing target file changes, the installer creates a backup under:

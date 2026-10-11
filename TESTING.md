@@ -32,6 +32,7 @@ Test totals depend on the working tree. Record results from the actual run rathe
 | `tests/model-catalog.test.ts` | Verifies the optional exporter/catalog contract independently of interactive editing. |
 | `tests/doctor.test.ts` | Verifies read-only diagnostics for healthy state, drift, malformed journals, missing entries, catalog evidence, auth evidence, and effort compatibility. |
 | `tests/odd-only.test.ts` | Guards the ODD-only contract: no packaged profile contains retired routes, runtime derivation removes exactly those routes, and only `/jb-odd-models` is registered. |
+| `tests/odd-lanes-scripts.test.ts` | Runs the lane scripts against temporary roots: setup refusal when a lane equals the source, copy-once identity and Gentle state files, no writes into the source, the real installer into each lane, launcher dry-run output of the four home variables, and failure on a missing lane `agent/` directory. Temp roots are removed afterward. |
 | `tests/transaction-recovery.test.ts` | Tests the transaction layer directly: locks, rollback, interrupted writes, recovery, undo, and external-change guards. |
 
 ## Focused test commands
@@ -62,6 +63,9 @@ node --experimental-strip-types --test tests/doctor.test.ts
 
 # ODD-only contract and retired-route removal
 node --experimental-strip-types --test tests/odd-only.test.ts
+
+# Lane setup and launcher scripts
+node --experimental-strip-types --test tests/odd-lanes-scripts.test.ts
 
 # Transaction safety and recovery
 node --experimental-strip-types --test tests/transaction-recovery.test.ts

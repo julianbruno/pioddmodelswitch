@@ -25,10 +25,12 @@ PI_HOME=/path/to/pi-home pi
 
 `PI_HOME` must also be present when Pi runs so the extension reads the same files the installer wrote.
 
+To run two Pi instances at the same time with different ODD profiles, give each its own home with the lane scripts (`scripts/setup-odd-lanes.sh`, `scripts/pi-opus.sh`, `scripts/pi-gpt.sh`). Instances sharing one home still share one profile. See [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes).
+
 ## Documentation
 
 - [Quick installation](INSTALLATION.md)
-- [Installation and recovery](HOW_TO_INSTALL.md)
+- [Installation and recovery](HOW_TO_INSTALL.md) — includes [two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes) with separate Pi homes.
 - [Programmatic testing](TESTING.md)
 - [Command usage](USAGE.md) — `/jb-odd-models edit` views, edits, or creates named profiles from all auth-available models in the invoking Pi registry; no exported catalog is required. Saving does not activate the profile. Optional **Balance** asks the current Pi model once, after consent and with possible provider cost, for an advisory new profile; some current models, including Codex, are refused. See [Balance](USAGE.md#balance-a-profile-with-the-current-model).
 - [How switching works](MODEL_SWITCHING.md) — direct selection also aligns the current Pi session's orchestrator model and thinking (1.4.0).

@@ -27,7 +27,13 @@ User asked how to run two true ODD lanes (separate `PI_HOME` trees), then explic
 - [x] L3 — Gentle isolation: launchers also export `GENTLE_PI_AGENT_HOME=$PI_HOME/agent` and `GENTLE_PI_CONFIG_HOME=$PI_HOME/gentle-ai`; setup copies `background-subagents.json` and `profiles.json` from source `gentle-ai/` into each lane only when missing; docs note what stays shared. Writer RED 9/12 (3 fail) then GREEN 12/12 focused, 221/221 full; test suite now cleans its temp roots. Uncommitted.
 - [x] L4 — Independent verification of L3. Verifier PASS 9/9 checks: 12/12 focused, 221/221 full, diff/whitespace clean, 755, dry-run prints four vars, setup copy-once without dev-binary.json, source and live-home mtimes unchanged. Real `exec pi` path not run. Parent removed 56 stale `/tmp/odd-lanes-*` and verifier scratch.
 
-- [ ] L5 — Propagate lane docs beyond HOW_TO_INSTALL: README, USAGE scope, MODEL_SWITCHING scope, MODEL_PROFILE_EXECUTIVE_SUMMARY (PI_HOME row, delivery state), INSTALLATION and INSTALL_AND_SYNC custom-home sections, ARCHITECTURE home resolution, TESTING test table. Passive docs: structural checks only (links, whitespace, full suite unchanged).
+- [x] L5 — Propagate lane docs beyond HOW_TO_INSTALL: README, USAGE scope, MODEL_SWITCHING scope, MODEL_PROFILE_EXECUTIVE_SUMMARY (PI_HOME row, delivery state), INSTALLATION and INSTALL_AND_SYNC custom-home sections, ARCHITECTURE home resolution, TESTING test table. Passive docs: 8 files, 21 insertions/4 replacements; links to `HOW_TO_INSTALL.md#two-concurrent-odd-lanes` resolve; `git diff --check` clean; `npm test` 221/221; parent readback of executive summary consistency.
+
+## Commit evidence
+
+- L1–L4: `e99f34d` feat(lanes): add isolated two-lane Pi setup and launchers — scripts, tests, HOW_TO_INSTALL section, tracker. Verified on identical bytes by L4 (12/12 focused, 221/221 full).
+- L5: docs commit following `e99f34d` on `feat/two-odd-lanes`.
+- Unrelated release 1.6.0 bump stays uncommitted (package.json, tests/manifest-validation.test.ts, odd/tasks/release-1-6-0.md).
 
 ## Gentle isolation finding (validated)
 
