@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Prepare two isolated Pi homes (ODD lanes) from an existing Pi home and install
+# Prepare three isolated Pi homes (ODD lanes) from an existing Pi home and install
 # jb-odd-models into each. Nothing is written into the source home, no profile is
-# activated, and Pi is not started. Launch each lane later with scripts/pi-opus.sh
-# and scripts/pi-gpt.sh, then pick the profile inside that instance.
+# activated, and Pi is not started. Launch each lane later with scripts/pi-opus.sh,
+# scripts/pi-gpt.sh, and scripts/pi-grok.sh, then pick the profile inside that instance.
 #
 # Environment overrides:
 #   PI_LANE_SOURCE     source Pi home (default: $HOME/.pi)
 #   PI_LANE_OPUS_HOME  opus lane home (default: $HOME/.pi-opus)
 #   PI_LANE_GPT_HOME   gpt lane home  (default: $HOME/.pi-gpt)
+#   PI_LANE_GROK_HOME  grok lane home (default: $HOME/.pi-grok)
 set -euo pipefail
 
 fail() {
@@ -24,6 +25,7 @@ INSTALLER="$PACKAGE_ROOT/install/install.sh"
 SOURCE_HOME=${PI_LANE_SOURCE:-"$HOME/.pi"}
 OPUS_HOME=${PI_LANE_OPUS_HOME:-"$HOME/.pi-opus"}
 GPT_HOME=${PI_LANE_GPT_HOME:-"$HOME/.pi-gpt"}
+GROK_HOME=${PI_LANE_GROK_HOME:-"$HOME/.pi-grok"}
 
 [ -d "$SOURCE_HOME/agent" ] || fail "Source Pi home has no agent/ directory at $SOURCE_HOME/agent. Set PI_LANE_SOURCE to an existing Pi home."
 [ -x "$INSTALLER" ] || fail "Package installer is missing or not executable: $INSTALLER"
@@ -42,10 +44,14 @@ physical_path() {
 SOURCE_REAL=$(physical_path "$SOURCE_HOME")
 OPUS_REAL=$(physical_path "$OPUS_HOME")
 GPT_REAL=$(physical_path "$GPT_HOME")
+GROK_REAL=$(physical_path "$GROK_HOME")
 
 [ "$OPUS_REAL" != "$SOURCE_REAL" ] || fail "Opus lane home resolves to the source home ($SOURCE_REAL); choose a different PI_LANE_OPUS_HOME."
 [ "$GPT_REAL" != "$SOURCE_REAL" ] || fail "GPT lane home resolves to the source home ($SOURCE_REAL); choose a different PI_LANE_GPT_HOME."
-[ "$OPUS_REAL" != "$GPT_REAL" ] || fail "Both lane homes resolve to the same path ($OPUS_REAL); they must be distinct."
+[ "$GROK_REAL" != "$SOURCE_REAL" ] || fail "Grok lane home resolves to the source home ($SOURCE_REAL); choose a different PI_LANE_GROK_HOME."
+[ "$OPUS_REAL" != "$GPT_REAL" ] || fail "Opus and GPT lane homes resolve to the same path ($OPUS_REAL); they must be distinct."
+[ "$OPUS_REAL" != "$GROK_REAL" ] || fail "Opus and Grok lane homes resolve to the same path ($OPUS_REAL); they must be distinct."
+[ "$GPT_REAL" != "$GROK_REAL" ] || fail "GPT and Grok lane homes resolve to the same path ($GPT_REAL); they must be distinct."
 
 # Identity files are copied once; an existing dest copy is never overwritten.
 IDENTITY_FILES="auth.json settings.json mcp.json models.json claude-bridge.json"
@@ -101,17 +107,21 @@ prepare_lane() {
 
 prepare_lane "$OPUS_HOME" "opus"
 prepare_lane "$GPT_HOME" "gpt"
+prepare_lane "$GROK_HOME" "grok"
 
 cat <<EOF
 
 ODD lanes are ready (no profile activated, Pi not started):
   opus: $OPUS_HOME
   gpt:  $GPT_HOME
+  grok: $GROK_HOME
 
 Next steps:
   1. Launch each lane in its own terminal (the launchers also set the Gentle homes):
        $SCRIPT_DIR/pi-opus.sh
        $SCRIPT_DIR/pi-gpt.sh
+       $SCRIPT_DIR/pi-grok.sh
   2. Inside the opus instance run:  /jb-odd-models claude-opus-5.5
      Inside the gpt instance run:   /jb-odd-models openai6-1-gentle
+     Inside the grok instance run:  /jb-odd-models grok-4-7
 EOF

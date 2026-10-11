@@ -42,13 +42,14 @@ The target must already contain `agent/`; this prevents accidentally installing 
 
 ### Two concurrent ODD lanes
 
-To run two Pi instances at the same time with different ODD routing (for example `claude-opus-5.5` in one and `openai6-1-gentle` in the other), each instance needs its own Pi home. Two `/jb-odd-models` selections against the same `PI_HOME` still collide: the last one wins for both instances. Three scripts set up and launch isolated lanes:
+To run Pi instances at the same time with different ODD routing, each instance needs its own Pi home. Setup creates three lanes (opus with `claude-opus-5.5`, gpt with `openai6-1-gentle`, and grok with `grok-4-7`); launch only the ones you need, and they can run concurrently. Two `/jb-odd-models` selections against the same `PI_HOME` still collide: the last one wins for both instances. Four scripts set up and launch isolated lanes:
 
 | Script | Purpose |
 | --- | --- |
-| `scripts/setup-odd-lanes.sh` | Creates `~/.pi-opus` and `~/.pi-gpt` from `~/.pi` (identity files copied once, `npm`/`install`/`bin` symlinked, sessions skipped) and runs this installer into each. Never writes into the source home. |
+| `scripts/setup-odd-lanes.sh` | Creates `~/.pi-opus`, `~/.pi-gpt`, and `~/.pi-grok` from `~/.pi` (identity files copied once, `npm`/`install`/`bin` symlinked, sessions skipped) and runs this installer into each. Never writes into the source home. |
 | `scripts/pi-opus.sh` | Launches `pi --name opus` with the opus lane home. |
 | `scripts/pi-gpt.sh` | Launches `pi --name gpt` with the gpt lane home. |
+| `scripts/pi-grok.sh` | Launches `pi --name grok` with the grok lane home. |
 
 Stock Pi does not honor `PI_HOME` for extensions, auth, or subagents, and Gentle keeps its own homes. The launchers therefore export four variables before starting Pi:
 
@@ -59,12 +60,13 @@ Stock Pi does not honor `PI_HOME` for extensions, auth, or subagents, and Gentle
 | `GENTLE_PI_AGENT_HOME` | `$PI_HOME/agent` |
 | `GENTLE_PI_CONFIG_HOME` | `$PI_HOME/gentle-ai` |
 
-At session start Gentle applies `$GENTLE_PI_CONFIG_HOME/models.json` to the lane's agents and `subagents.json`. Without the Gentle variables it reads the global `~/.pi/gentle-ai/models.json` and overwrites the lane's routing. Setup also copies `gentle-ai/background-subagents.json` and `gentle-ai/profiles.json` from the source once; existing lane copies are kept. Override the paths with `PI_LANE_SOURCE`, `PI_LANE_OPUS_HOME`, and `PI_LANE_GPT_HOME`; set `PI_LANE_DRY_RUN=1` to print the exported env without starting Pi.
+At session start Gentle applies `$GENTLE_PI_CONFIG_HOME/models.json` to the lane's agents and `subagents.json`. Without the Gentle variables it reads the global `~/.pi/gentle-ai/models.json` and overwrites the lane's routing. Setup also copies `gentle-ai/background-subagents.json` and `gentle-ai/profiles.json` from the source once; existing lane copies are kept. Override the paths with `PI_LANE_SOURCE`, `PI_LANE_OPUS_HOME`, `PI_LANE_GPT_HOME`, and `PI_LANE_GROK_HOME`; set `PI_LANE_DRY_RUN=1` to print the exported env without starting Pi.
 
 ```sh
 ./scripts/setup-odd-lanes.sh      # once; re-runs keep existing lane files
 ./scripts/pi-opus.sh              # terminal 1, then: /jb-odd-models claude-opus-5.5
 ./scripts/pi-gpt.sh               # terminal 2, then: /jb-odd-models openai6-1-gentle
+./scripts/pi-grok.sh              # terminal 3, then: /jb-odd-models grok-4-7
 ```
 
 Setup activates no profile; the selection happens inside each running instance. A complete working example is in [ODD lanes example](ODD_LANES_EXAMPLE.md).
