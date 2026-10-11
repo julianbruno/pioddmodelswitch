@@ -57,7 +57,7 @@ Add a selectable `gpt-5.5-powerful` profile that uses only `openai-codex/gpt-5.5
 - Parent spot-check: focused suite passed 19/19 and `git diff --check` passed.
 - Runtime harness: N/A because automated suites cover declarative profile selection/expansion and no installed user configuration should be mutated during verification.
 - Approximate authored change including the feature document: 226 lines.
-- Installed the committed package into `/home/julian/.pi`; the installer created a timestamped backup and post-install checks confirmed the registered 25-agent GPT-5.5-only profile remains unpaired.
+- Installed the committed package into `~/.pi`; the installer created a timestamped backup and post-install checks confirmed the registered 25-agent GPT-5.5-only profile remains unpaired.
 
 ## Next step
 Restart Pi, then run `/jb-sdd-odd-models status`, `/jb-sdd-odd-models preview gpt-5.5-powerful`, and `/jb-sdd-odd-models doctor`.

@@ -62,7 +62,7 @@ Add a selectable `claude-opus-5.5` profile that uses only `claude-bridge/claude-
 - Runtime harness before installation: N/A because the test suites cover declarative selection/expansion and real Pi-home mutation is reserved for the explicitly requested installation step.
 - T1 rollback boundary: remove the standalone profile file and its manifest/test/documentation registration, and restore package version 1.2.0; existing profiles and pairings remain independent.
 - Work-unit commit: `76a1a5f` (`feat(profiles): add Claude Opus 5.5 profile`).
-- Installation completed in `/home/julian/.pi`; backup: `/home/julian/.pi/backups/jb-sdd-odd-models-2026-09-27T21-07-36-887Z-2619079`.
+- Installation completed in `~/.pi`; backup: `~/.pi/backups/jb-sdd-odd-models-2026-09-27T21-07-36-887Z-2619079`.
 - Post-install verifier PASS for T1: installed manifest/profile/extension/helper bytes matched the repository; the Claude profile contained exactly 25 agents; active canonical/runtime mappings remained on default `openaigentle`.
 - User correction after T1: workload intensity depends on both model capability and task; copying Sol/Luna thinking values directly to Opus 5.5 was rejected, especially `sdd-archive: max`.
 - T2 writer RED: 2 focused failures exposed the old package version and copied effort categories.
@@ -71,7 +71,7 @@ Add a selectable `claude-opus-5.5` profile that uses only `claude-bridge/claude-
 - T2 runtime harness before installation: N/A because isolated suites exercise profile derivation; real Pi-home installation remains the explicitly requested final step.
 - T2 rollback boundary: restore the 1.3.0 profile values/docs/tests and package version; profile registration and all unrelated mappings remain unchanged.
 - T2 work-unit commit: `46e6a40` (`fix(profiles): calibrate Opus thinking by task`).
-- Version 1.3.1 installation completed in `/home/julian/.pi`; backup: `/home/julian/.pi/backups/jb-sdd-odd-models-2026-09-27T21-52-35-405Z-2664987`.
+- Version 1.3.1 installation completed in `~/.pi`; backup: `~/.pi/backups/jb-sdd-odd-models-2026-09-27T21-52-35-405Z-2664987`.
 - T2 post-install verifier PASS: installed profile/manifest/extension/helper bytes match the repository; exact 5 low / 8 medium / 12 high task groups were confirmed; all 25 agents use Opus 5.5; no forbidden levels exist; active canonical/runtime mappings remain on default `openaigentle`.
 - T3 user decision: direct profile selection aligns the current session from the effective `orchestrator` entry and fails closed rather than allowing session/profile divergence.
 - T3 writer RED/GREEN: the initial session-alignment test failed against the previous behavior, then the command suite passed after implementation; isolated cases cover model lookup/auth/throw, thinking clamp, nonstandard effort, `max`, no-op alignment, compensation, and compensation failure.
@@ -81,7 +81,7 @@ Add a selectable `claude-opus-5.5` profile that uses only `claude-bridge/claude-
 - T3 runtime harness before installation: isolated command and installer seams exercise the runtime boundary; live installed-session selection remains pending until the plugin is reinstalled and Pi reloads.
 - T3 rollback boundary: restore the 1.3.1 command behavior/tests/docs/package version; profile data, registration, and T1/T2 mappings remain unchanged.
 - T3 work-unit commit: `ce683b6` (`feat(profiles): align current session on switch`).
-- Version 1.4.0 installation completed in `/home/julian/.pi`; backup: `/home/julian/.pi/backups/jb-sdd-odd-models-2026-09-27T22-25-27-907Z-2700985`.
+- Version 1.4.0 installation completed in `~/.pi`; backup: `~/.pi/backups/jb-sdd-odd-models-2026-09-27T22-25-27-907Z-2700985`.
 - T3 post-install verifier PASS: all 21 installed assets match repository bytes; active canonical/runtime mappings remain on default `openaigentle`; the installed extension contains the fail-closed current-session alignment behavior.
 - Live transition remains intentionally user-driven because the running Pi process must reload the newly installed extension before the command can exercise it.
 

@@ -20,7 +20,7 @@ Update the model switching plug-in so it manages Organic Driven Development (ODD
 - `gentle-ai-verify` ran installer smoke with temporary `PI_HOME`: passed.
 - Parent spot check `node - <<'NODE' ...`: passed.
 - Command rename validation confirmed source registers `jb-sdd-odd-models` and no longer registers `sdd-models`.
-- Installer wrote the updated extension to `/Users/julian/.pi/agent/extensions/sdd-model-profiles.ts`.
+- Installer wrote the updated extension to `~/.pi/agent/extensions/sdd-model-profiles.ts`.
 - Installed runtime profile contains ODD mappings: explore=`medium`, worker=`high`, verify=`xhigh`.
 
 ## Follow-up change

@@ -16,7 +16,7 @@ Scope: Correct the standalone profile, tests, and README; reinstall into local P
 ## Progress
 
 - Prior diagnosis: local Pi registry contains `gpt-6.1-sol`, but no `gpt-6.1-luna`; the previous profile had 21 incorrect Sol and five incorrect Luna entries. User chose registered Sol ID and the Sol-only copy semantics.
-- Current: C2 verified in the repository with `openai/gpt-6.1-sol`; not reinstalled into `/home/julian/.pi`. Runtime model invocation not verified.
+- Current: C2 verified in the repository with `openai/gpt-6.1-sol`; not reinstalled into `~/.pi`. Runtime model invocation not verified.
 
 ## Next step
 
