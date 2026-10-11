@@ -67,7 +67,7 @@ At session start Gentle applies `$GENTLE_PI_CONFIG_HOME/models.json` to the lane
 ./scripts/pi-gpt.sh               # terminal 2, then: /jb-odd-models openai6-1-gentle
 ```
 
-Setup activates no profile; the selection happens inside each running instance.
+Setup activates no profile; the selection happens inside each running instance. A complete working example is in [ODD lanes example](ODD_LANES_EXAMPLE.md).
 
 Lanes started before the launchers exported the Gentle variables may hold global routing. Relaunch them with the current launchers and re-select the profile once (`/jb-odd-models <profile>`).
 

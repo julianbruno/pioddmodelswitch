@@ -32,7 +32,8 @@ User asked how to run two true ODD lanes (separate `PI_HOME` trees), then explic
 ## Commit evidence
 
 - L1–L4: `e99f34d` feat(lanes): add isolated two-lane Pi setup and launchers — scripts, tests, HOW_TO_INSTALL section, tracker. Verified on identical bytes by L4 (12/12 focused, 221/221 full).
-- L5: docs commit following `e99f34d` on `feat/two-odd-lanes`.
+- L5: `87c7b67` docs(lanes): point guides to two concurrent ODD lanes.
+- L6: user confirmed the real lanes work (setup re-run, launchers, per-lane profile selection) and asked to save the configuration as an example, commit, and integrate. Added `ODD_LANES_EXAMPLE.md` (verbatim setup output, real dry-run output checked against the live lanes) and a link from HOW_TO_INSTALL; fast-forward into `main`. No push.
 - Unrelated release 1.6.0 bump stays uncommitted (package.json, tests/manifest-validation.test.ts, odd/tasks/release-1-6-0.md).
 
 ## Gentle isolation finding (validated)
