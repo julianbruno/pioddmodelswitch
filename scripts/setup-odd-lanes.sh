@@ -121,7 +121,7 @@ Next steps:
        $SCRIPT_DIR/pi-opus.sh
        $SCRIPT_DIR/pi-gpt.sh
        $SCRIPT_DIR/pi-grok.sh
-  2. Inside the opus instance run:  /jb-odd-models claude-opus-5.5
-     Inside the gpt instance run:   /jb-odd-models openai6-1-gentle
-     Inside the grok instance run:  /jb-odd-models grok-4-7
+  2. Inside the opus instance run:  /jb:odd-models claude-opus-5.5
+     Inside the gpt instance run:   /jb:odd-models openai6-1-gentle
+     Inside the grok instance run:  /jb:odd-models grok-4-7
 EOF

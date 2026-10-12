@@ -26,12 +26,12 @@ Test totals depend on the working tree. Record results from the actual run rathe
 | `tests/manifest-validation.test.ts` | Validates manifest schema, package version, managed agent coverage, generated profile files, named-profile role expansion, opposite-provider judge pairing, and runtime derivation. |
 | `tests/installer-merge.test.ts` | Verifies installation into temporary `PI_HOME` fixtures, dynamic copying of every registered profile and helper module (including `balancing.ts`), default active profile derivation, backup behavior, idempotency, and Node version gating. |
 | `tests/multi-instance.test.ts` | Runs two Node subprocesses against disposable shared or separate homes to check shared-file effects and absence of command-driven live-state broadcast through fake Pi APIs. |
-| `tests/command-behavior.test.ts` | Exercises the `/jb-odd-models` command seam with a fake Pi command context: completions, list, preview, session model/thinking alignment, no-op behavior, preflight failures, restoration, undo, recover, and transaction safety. |
+| `tests/command-behavior.test.ts` | Exercises the `/jb:odd-models` command seam with a fake Pi command context: completions, list, preview, session model/thinking alignment, no-op behavior, preflight failures, restoration, undo, recover, and transaction safety. |
 | `tests/profile-editor.test.ts` | Exercises scripted View/Edit/Create/Balance dialogs, live availability and thinking choices, cancellation, unavailable assignments, drift guards, and save-only persistence/rollback. |
 | `tests/profile-balancing.test.ts` | Tests Balance request allowlisting, criteria and size limits, output-cap gating, timeout/cancellation, no-retry behavior, and strict proposal validation with stubbed consultations. |
 | `tests/model-catalog.test.ts` | Verifies the optional exporter/catalog contract independently of interactive editing. |
 | `tests/doctor.test.ts` | Verifies read-only diagnostics for healthy state, drift, malformed journals, missing entries, catalog evidence, auth evidence, and effort compatibility. |
-| `tests/odd-only.test.ts` | Guards the ODD-only contract: no packaged profile contains retired routes, runtime derivation removes exactly those routes, and only `/jb-odd-models` is registered. |
+| `tests/odd-only.test.ts` | Guards the ODD-only contract: no packaged profile contains retired routes, runtime derivation removes exactly those routes, and only `/jb:odd-models` is registered. |
 | `tests/odd-lanes-scripts.test.ts` | Runs the lane scripts against temporary roots: setup refusal when a lane equals the source, copy-once identity and Gentle state files, no writes into the source, the real installer into each lane, launcher dry-run output of the four home variables, and failure on a missing lane `agent/` directory. Temp roots are removed afterward. |
 | `tests/transaction-recovery.test.ts` | Tests the transaction layer directly: locks, rollback, interrupted writes, recovery, undo, and external-change guards. |
 
@@ -240,6 +240,6 @@ Only install into a real Pi home when explicitly intended:
 After real installation, restart Pi and verify manually:
 
 ```text
-/jb-odd-models status
-/jb-odd-models doctor
+/jb:odd-models status
+/jb:odd-models doctor
 ```

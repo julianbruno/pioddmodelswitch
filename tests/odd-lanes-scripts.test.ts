@@ -220,11 +220,11 @@ test("setup creates all three lane homes, copies identity files, symlinks bulky 
     const runtime = await readJson(join(dest, "agent", "subagents.json"));
     assert.ok(runtime.source_marker, "source subagents.json is copied as the dest base");
   }
-  assert.match(result.stdout, /jb-odd-models claude-opus-5\.5/);
-  assert.match(result.stdout, /jb-odd-models openai6-1-gentle/);
+  assert.match(result.stdout, /jb:odd-models claude-opus-5\.5/);
+  assert.match(result.stdout, /jb:odd-models openai6-1-gentle/);
   assert.match(result.stdout, new RegExp(opus.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(result.stdout, new RegExp(gpt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.match(result.stdout, /Inside the grok instance run: {2}\/jb-odd-models grok-4-7/);
+  assert.match(result.stdout, /Inside the grok instance run: {2}\/jb:odd-models grok-4-7/);
   assert.match(result.stdout, new RegExp(`^  grok: ${escapeRegExp(grok)}$`, "m"));
   assert.match(result.stdout, /pi-grok\.sh/);
 });

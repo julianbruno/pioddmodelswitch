@@ -1,4 +1,4 @@
-# Install `/jb-odd-models`
+# Install `/jb:odd-models`
 
 This guide shows the shortest safe path to install the model-profile switch plugin into Pi.
 
@@ -14,8 +14,8 @@ cd /path/to/pissdmodelswitch
 Then restart Pi and verify the command is loaded:
 
 ```text
-/jb-odd-models status
-/jb-odd-models doctor
+/jb:odd-models status
+/jb:odd-models doctor
 ```
 
 ## Requirements
@@ -71,17 +71,17 @@ Re-running the installer with identical generated files is a no-op and does not 
 Run:
 
 ```text
-/jb-odd-models status
-/jb-odd-models doctor
+/jb:odd-models status
+/jb:odd-models doctor
 ```
 
 Expected result:
 
-- Pi recognizes `/jb-odd-models`.
+- Pi recognizes `/jb:odd-models`.
 - `status` shows `openaigentle` by default, another registered profile, or intentionally `custom`.
 - `doctor` reports healthy managed mappings or actionable diagnostics.
-- `/jb-odd-models edit` can view saved profiles without a model registry or catalog. Edit/Create use all auth-available models in the invoking Pi registry, not the session-scoped subset; no export is required. A missing, empty, invalid, or failing registry blocks Edit/Create without writes or a file-catalog fallback.
-- Saving a named profile does not activate it. Select it separately with `/jb-odd-models <profile>`.
+- `/jb:odd-models edit` can view saved profiles without a model registry or catalog. Edit/Create use all auth-available models in the invoking Pi registry, not the session-scoped subset; no export is required. A missing, empty, invalid, or failing registry blocks Edit/Create without writes or a file-catalog fallback.
+- Saving a named profile does not activate it. Select it separately with `/jb:odd-models <profile>`.
 
 `npm run export:model-catalog` remains optional for inspection/headless tooling. Reinstall to copy a generated `config/model-catalog.json` into `$PI_HOME/gentle-ai/model-catalog.json`, or copy it there yourself; interactive editing does not consult it. Registry availability is local auth/configuration evidence, not proof of provider reachability or account entitlement.
 
@@ -90,14 +90,14 @@ Expected result:
 If the installer refuses to write because a transaction or lock exists, restart Pi and inspect:
 
 ```text
-/jb-odd-models doctor
+/jb:odd-models doctor
 ```
 
 Recover only when the diagnostic says recovery is safe:
 
 ```text
-/jb-odd-models recover
-/jb-odd-models doctor
+/jb:odd-models recover
+/jb:odd-models doctor
 ```
 
 ## Related docs

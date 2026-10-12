@@ -33,6 +33,7 @@ test("only the renamed command entrypoint and package are shipped", async () => 
   assert.equal((await json("package.json")).name, "jb-odd-models");
   const registered: string[] = [];
   oddModelProfiles({ registerCommand: (name: string) => registered.push(name) } as any, { piHome: "/nonexistent-pi-home" });
-  assert.deepEqual(registered, ["jb-odd-models"]);
+  assert.deepEqual(registered, ["jb:odd-models"]);
+  assert.equal(registered.includes("jb-odd-models"), false, "legacy command must not be registered");
   await assert.rejects(readFile("extensions/sdd-model-profiles.ts", "utf8"), { code: "ENOENT" });
 });

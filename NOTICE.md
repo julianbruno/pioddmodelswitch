@@ -1,6 +1,6 @@
 # Provenance and licensing notice
 
-This package is a portable snapshot originally assembled from observed Gentle Pi model-profile configuration and an SDD/ODD model-switching extension on the machine where it was created. The packaged command is `/jb-sdd-odd-models`.
+This package is a portable snapshot originally assembled from observed Gentle Pi model-profile configuration and an SDD/ODD model-switching extension on the machine where it was created. The packaged command is `/jb:odd-models`.
 
 The extension source has been adapted for this package with narrowly scoped portability, manifest, transaction, installer, doctor, and documentation hardening. The versioned JSON profiles preserve the observed model mappings, while active install-time files are derived from the manifest default profile.
 

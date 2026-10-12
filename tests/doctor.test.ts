@@ -96,7 +96,7 @@ async function createHarness(effort = "high") {
 
   const commands = new Map<string, RegisteredCommand>();
   oddModelProfiles({ registerCommand: (name: string, command: RegisteredCommand) => commands.set(name, command) } as any, { piHome });
-  const command = commands.get("jb-odd-models");
+  const command = commands.get("jb:odd-models");
   assert.ok(command);
 
   const notifications: Array<{ message: string; level: string }> = [];

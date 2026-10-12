@@ -1,4 +1,4 @@
-# Install and recover `/jb-odd-models`
+# Install and recover `/jb:odd-models`
 
 Run the included installer from this package. It validates package data, backs up existing files that will change, installs the command plus helper layout, and merges only the managed ODD runtime mappings.
 
@@ -42,7 +42,7 @@ The target must already contain `agent/`; this prevents accidentally installing 
 
 ### Two concurrent ODD lanes
 
-To run Pi instances at the same time with different ODD routing, each instance needs its own Pi home. Setup creates three lanes (opus with `claude-opus-5.5`, gpt with `openai6-1-gentle`, and grok with `grok-4-7`); launch only the ones you need, and they can run concurrently. Two `/jb-odd-models` selections against the same `PI_HOME` still collide: the last one wins for both instances. Four scripts set up and launch isolated lanes:
+To run Pi instances at the same time with different ODD routing, each instance needs its own Pi home. Setup creates three lanes (opus with `claude-opus-5.5`, gpt with `openai6-1-gentle`, and grok with `grok-4-7`); launch only the ones you need, and they can run concurrently. Two `/jb:odd-models` selections against the same `PI_HOME` still collide: the last one wins for both instances. Four scripts set up and launch isolated lanes:
 
 | Script | Purpose |
 | --- | --- |
@@ -64,14 +64,14 @@ At session start Gentle applies `$GENTLE_PI_CONFIG_HOME/models.json` to the lane
 
 ```sh
 ./scripts/setup-odd-lanes.sh      # once; re-runs keep existing lane files
-./scripts/pi-opus.sh              # terminal 1, then: /jb-odd-models claude-opus-5.5
-./scripts/pi-gpt.sh               # terminal 2, then: /jb-odd-models openai6-1-gentle
-./scripts/pi-grok.sh              # terminal 3, then: /jb-odd-models grok-4-7
+./scripts/pi-opus.sh              # terminal 1, then: /jb:odd-models claude-opus-5.5
+./scripts/pi-gpt.sh               # terminal 2, then: /jb:odd-models openai6-1-gentle
+./scripts/pi-grok.sh              # terminal 3, then: /jb:odd-models grok-4-7
 ```
 
 Setup activates no profile; the selection happens inside each running instance. A complete working example is in [ODD lanes example](ODD_LANES_EXAMPLE.md).
 
-Lanes started before the launchers exported the Gentle variables may hold global routing. Relaunch them with the current launchers and re-select the profile once (`/jb-odd-models <profile>`).
+Lanes started before the launchers exported the Gentle variables may hold global routing. Relaunch them with the current launchers and re-select the profile once (`/jb:odd-models <profile>`).
 
 Still shared between lanes: prompt history (`~/.pi/agent/history`), skills, `/gentle:stats`, the Engram server, and pi-pretty's `~/.pi/agent/pi-pretty/fff` database.
 
@@ -87,7 +87,7 @@ Backups retain paths relative to `PI_HOME`. Newly created files have no prior co
 
 ## Upgrade from the previous command
 
-Version 2 of the manifest manages only ODD, orchestrator, and review/judge agents. The command is now `/jb-odd-models`; the previous `/jb-sdd-odd-models` command is not kept as an alias. Run the installer once from this package to upgrade:
+Version 2 of the manifest manages only ODD, orchestrator, and review/judge agents. The command is now `/jb:odd-models`; the previous `/jb-sdd-odd-models` command is not kept as an alias. Run the installer once from this package to upgrade:
 
 | Existing state | Installer action |
 |---|---|
@@ -99,45 +99,45 @@ Version 2 of the manifest manages only ODD, orchestrator, and review/judge agent
 
 The shared helper directory `agent/extensions/model-profiles/` stays in place and is updated for the new command.
 
-If an active transaction journal or lock exists, the installer fails closed before writing. Run `/jb-odd-models doctor` to inspect the state and `/jb-odd-models recover` only when it is safe to complete recovery.
+If an active transaction journal or lock exists, the installer fails closed before writing. Run `/jb:odd-models doctor` to inspect the state and `/jb:odd-models recover` only when it is safe to complete recovery.
 
 ## Verify
 
 1. Restart Pi so it loads the installed extension.
-2. Run `/jb-odd-models status`.
-3. Run `/jb-odd-models doctor`.
+2. Run `/jb:odd-models status`.
+3. Run `/jb:odd-models doctor`.
 4. Confirm that all managed mappings are listed and the active profile is `openaigentle`, another registered profile, or intentionally `custom`.
 5. Optionally switch and verify:
 
    ```text
-   /jb-odd-models grok-recommended
-   /jb-odd-models status
-   /jb-odd-models doctor
+   /jb:odd-models grok-recommended
+   /jb:odd-models status
+   /jb:odd-models doctor
    ```
 
 If Pi does not recognize the command, verify that Gentle Pi loads TypeScript extensions from `$PI_HOME/agent/extensions`, that `extensions/model-profiles/` was copied next to the command extension, and that the same `PI_HOME` is used at install time and runtime.
 
 ## Add or install a third profile
 
-For installed profiles, prefer `/jb-odd-models edit`: Create clones a registered template and offers all auth-available models from the invoking Pi registry, without requiring an exported catalog. Save updates the named definition and registers it, but does not activate it; select `/jb-odd-models <profile>` separately. View needs no model availability. Missing, empty, invalid, or failing registry evidence blocks Edit/Create without writes or a stale-catalog fallback. Availability does not prove provider reachability or account entitlement. See [editor behavior and optional catalog export](USAGE.md#edit-or-create-a-named-profile).
+For installed profiles, prefer `/jb:odd-models edit`: Create clones a registered template and offers all auth-available models from the invoking Pi registry, without requiring an exported catalog. Save updates the named definition and registers it, but does not activate it; select `/jb:odd-models <profile>` separately. View needs no model availability. Missing, empty, invalid, or failing registry evidence blocks Edit/Create without writes or a stale-catalog fallback. Availability does not prove provider reachability or account entitlement. See [editor behavior and optional catalog export](USAGE.md#edit-or-create-a-named-profile).
 
 For packaged profiles, the manifest is the source of truth. To add a profile such as `local`, add it to `model-profiles.manifest.json`, create `models.local.json`, and include exactly the same active managed agents as the existing profiles, including configured judge/reviewer agents. Then reinstall so the new manifest/profile file is copied into Pi home. A profile without an `oppositeProviderJudges.profilePairs` entry uses its own models for judges.
 
 After reinstalling, verify:
 
 ```text
-/jb-odd-models list
-/jb-odd-models preview local
-/jb-odd-models doctor
+/jb:odd-models list
+/jb:odd-models preview local
+/jb:odd-models doctor
 ```
 
 ## Recover or undo runtime state
 
 Use these commands from Pi after installation:
 
-- `/jb-odd-models undo` reverts the last completed transaction only if neither target file has changed since that transaction completed.
-- `/jb-odd-models recover` handles an interrupted transaction when current bytes match recorded safe states.
-- `/jb-odd-models doctor` reports stale locks, malformed journals, and preserved unrelated mappings without writing.
+- `/jb:odd-models undo` reverts the last completed transaction only if neither target file has changed since that transaction completed.
+- `/jb:odd-models recover` handles an interrupted transaction when current bytes match recorded safe states.
+- `/jb:odd-models doctor` reports stale locks, malformed journals, and preserved unrelated mappings without writing.
 
 Recovery is intentionally conservative. If a noncooperating writer changed either file outside the transaction, recovery refuses unknown bytes instead of overwriting them.
 

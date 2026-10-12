@@ -14,15 +14,15 @@ cd ~/miscodigos/pissdmodelswitch
 Then restart Pi and run:
 
 ```text
-/jb-odd-models status
-/jb-odd-models doctor
+/jb:odd-models status
+/jb:odd-models doctor
 ```
 
 If the active profile is not `gpt-5.6-recommended`, switch to it:
 
 ```text
-/jb-odd-models gpt-5.6-recommended
-/jb-odd-models status
+/jb:odd-models gpt-5.6-recommended
+/jb:odd-models status
 ```
 
 ## What the installer updates
@@ -60,14 +60,14 @@ With Gentle, a custom home also needs `PI_CODING_AGENT_DIR` and `GENTLE_PI_AGENT
 If installation refuses to write because a model-profile transaction or lock exists, inspect first:
 
 ```text
-/jb-odd-models doctor
+/jb:odd-models doctor
 ```
 
 Recover only when the diagnostic says it is safe:
 
 ```text
-/jb-odd-models recover
-/jb-odd-models doctor
+/jb:odd-models recover
+/jb:odd-models doctor
 ```
 
 ## Expected result

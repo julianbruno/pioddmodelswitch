@@ -1,4 +1,4 @@
-# Use `/jb-odd-models`
+# Use `/jb:odd-models`
 
 The command reports, previews, diagnoses, switches, undoes, recovers, or edits the global model profile used by the managed orchestrator, ODD generic agents, and configured judge/reviewer agents. Registered profile names and optional opposite-provider judge routing come from `model-profiles.manifest.json` instead of being hard-coded.
 
@@ -12,25 +12,25 @@ To use different profiles at the same time, run each instance in a separate Pi h
 
 | Input | Effect |
 |---|---|
-| `/jb-odd-models` | Shows usage, active-state detection, and all managed mappings. Read-only. |
-| `/jb-odd-models status` | Shows active-state detection and all managed mappings. Read-only. |
-| `/jb-odd-models doctor` | Performs read-only diagnostics for manifest/profile shape, active canonical/runtime state, transaction journals/locks, local Pi catalog presence, effort compatibility, and auth configuration evidence. |
-| `/jb-odd-models list` | Opens a profile activation picker in interactive or supported RPC UI. Without UI/select support, lists profiles and the default with a direct invocation hint; read-only fallback. |
-| `/jb-odd-models preview <profile>` | Shows managed canonical/runtime before → after mappings for a profile. Read-only. |
-| `/jb-odd-models <profile>` | Validates registered profiles and current files, aligns this Pi session with the effective `orchestrator` model and standard thinking level, writes changed canonical/runtime mappings, then reloads Pi only if files changed. No-op when session and files already match. |
-| `/jb-odd-models undo` | Reverts the last completed profile transaction only if both files still match the recorded transaction output, then reloads Pi. |
-| `/jb-odd-models recover` | Finishes, records, or clears an interrupted profile transaction when the current file bytes match a safe recorded state, then reloads Pi when recovery changed state. |
-| `/jb-odd-models edit` | Opens a Pi dialog to view, edit, or create a named profile from a template, or to Balance a new profile with one consented consultation of the current Pi model. Viewing is read-only; saving never changes the active profile. |
-| `/jb-odd-models <invalid>` | Displays an unknown-argument warning and usage. Read-only. |
+| `/jb:odd-models` | Shows usage, active-state detection, and all managed mappings. Read-only. |
+| `/jb:odd-models status` | Shows active-state detection and all managed mappings. Read-only. |
+| `/jb:odd-models doctor` | Performs read-only diagnostics for manifest/profile shape, active canonical/runtime state, transaction journals/locks, local Pi catalog presence, effort compatibility, and auth configuration evidence. |
+| `/jb:odd-models list` | Opens a profile activation picker in interactive or supported RPC UI. Without UI/select support, lists profiles and the default with a direct invocation hint; read-only fallback. |
+| `/jb:odd-models preview <profile>` | Shows managed canonical/runtime before → after mappings for a profile. Read-only. |
+| `/jb:odd-models <profile>` | Validates registered profiles and current files, aligns this Pi session with the effective `orchestrator` model and standard thinking level, writes changed canonical/runtime mappings, then reloads Pi only if files changed. No-op when session and files already match. |
+| `/jb:odd-models undo` | Reverts the last completed profile transaction only if both files still match the recorded transaction output, then reloads Pi. |
+| `/jb:odd-models recover` | Finishes, records, or clears an interrupted profile transaction when the current file bytes match a safe recorded state, then reloads Pi when recovery changed state. |
+| `/jb:odd-models edit` | Opens a Pi dialog to view, edit, or create a named profile from a template, or to Balance a new profile with one consented consultation of the current Pi model. Viewing is read-only; saving never changes the active profile. |
+| `/jb:odd-models <invalid>` | Displays an unknown-argument warning and usage. Read-only. |
 
-Arguments are trimmed and case-insensitive. Dots and hyphens are supported in registered path-safe profile names, so `/jb-odd-models GPT-5.6-RECOMMENDED` selects `gpt-5.6-recommended`.
+Arguments are trimmed and case-insensitive. Dots and hyphens are supported in registered path-safe profile names, so `/jb:odd-models GPT-5.6-RECOMMENDED` selects `gpt-5.6-recommended`.
 
 ## Common checks
 
 ### Inspect without changing anything
 
 ```text
-/jb-odd-models status
+/jb:odd-models status
 ```
 
 Expected heading:
@@ -50,7 +50,7 @@ The persisted state can also be any registered profile name, `custom`, or `unkno
 ### Diagnose local configuration
 
 ```text
-/jb-odd-models doctor
+/jb:odd-models doctor
 ```
 
 `doctor` never writes, repairs, reclaims locks, or reloads Pi. It distinguishes:
@@ -75,20 +75,20 @@ Installed/global profile status does not prove effective project routing: projec
 ### Pick a profile or preview without changing anything
 
 ```text
-/jb-odd-models list
-/jb-odd-models preview openaigentle
+/jb:odd-models list
+/jb:odd-models preview openaigentle
 ```
 
-**Selecting an option in `list` activates it immediately:** it changes shared configuration and sets the current Pi `/model` and thinking to that profile's effective `orchestrator` assignment, using the same validated activation and rollback path as `/jb-odd-models <profile>`. The picker title names these effects. Options follow manifest order and show `profile name — provider/model (thinking)`; mixed-review profiles show the orchestrator, not a judge's model. Pi's built-in `/model` is unchanged; no `/list` command is added.
+**Selecting an option in `list` activates it immediately:** it changes shared configuration and sets the current Pi `/model` and thinking to that profile's effective `orchestrator` assignment, using the same validated activation and rollback path as `/jb:odd-models <profile>`. The picker title names these effects. Options follow manifest order and show `profile name — provider/model (thinking)`; mixed-review profiles show the orchestrator, not a judge's model. Pi's built-in `/model` is unchanged; no `/list` command is added.
 
-Cancel or an empty selection makes no writes, model/thinking changes, or reload. Unknown selections and picker errors stop without activation. Activation reloads the profile registry and checks the current Pi model registry after selection; an unavailable selected model fails safely. Without UI (including JSON/print mode) or a supported select dialog, `list` stays textual; use `/jb-odd-models <profile>` to activate directly. Use `preview`, not the picker, for read-only inspection.
+Cancel or an empty selection makes no writes, model/thinking changes, or reload. Unknown selections and picker errors stop without activation. Activation reloads the profile registry and checks the current Pi model registry after selection; an unavailable selected model fails safely. Without UI (including JSON/print mode) or a supported select dialog, `list` stays textual; use `/jb:odd-models <profile>` to activate directly. Use `preview`, not the picker, for read-only inspection.
 
 The preview shows each managed agent's current canonical entry and runtime entry next to the selected profile's effective after state, including opposite-provider judge mappings when configured for a paired profile. Missing legacy entries can be repaired by a switch. Malformed existing managed entries stop the switch before any write.
 
 ### Preview Grok 4.7 assignments
 
 ```text
-/jb-odd-models preview grok-4-7
+/jb:odd-models preview grok-4-7
 ```
 
 `grok-4-7` copies all 13 agents from `grok`, changing only the model to `xai/grok-4.7`:
@@ -104,7 +104,7 @@ This profile is unpaired, so its judges also stay on Grok 4.7. The default remai
 ### Select a profile
 
 ```text
-/jb-odd-models openaigentle
+/jb:odd-models openaigentle
 ```
 
 On success, the notice names the shared canonical and runtime files changed, and only the invoking Pi session reloads for changed files. A file no-op reports shared files unchanged and the invoking orchestrator aligned, with no reload. If reload fails, shared persisted state remains applied and the caller's live orchestrator remains aligned: no rollback is performed. Run `/reload` manually or restart Pi. Undo/recovery change shared persisted state but do not establish live orchestrator alignment. The canonical profile uses `thinking`; the runtime mapping receives the same value as `effort`. Already-active files stay untouched, but direct selection still aligns the current session. Missing model/auth, unavailable rollback model, unsupported orchestrator thinking, and clamped thinking fail before file mutation. A later file-switch failure attempts session restoration and reports restoration errors.
@@ -112,14 +112,14 @@ On success, the notice names the shared canonical and runtime files changed, and
 ## Edit or create a named profile
 
 ```text
-/jb-odd-models edit
+/jb:odd-models edit
 ```
 
 Pi dialogs offer **View**, **Edit**, **Create**, or **Balance** (see [Balance a profile with the current model](#balance-a-profile-with-the-current-model)):
 
 1. Choose Edit and a registered profile, or Create, a safe lowercase name, and an existing template.
 2. Choose a managed role, a live model, and a supported thinking level.
-3. Choose Save and confirm. This saves the named definition only; use `/jb-odd-models <profile>` separately to activate it.
+3. Choose Save and confirm. This saves the named definition only; use `/jb:odd-models <profile>` separately to activate it.
 
 Model choices come from **all auth-available models in the invoking Pi registry** (`ctx.modelRegistry.getAvailable()`), including custom/provider-extension models. They are not filtered by `ctx.scopedModels`. No exported catalog is required or consulted. Availability is local registry/auth evidence, not provider reachability or account entitlement; the editor does not refresh the registry or mutate auth/settings. View, Edit, and Create never make provider calls; only Balance does, once, after explicit consent.
 
@@ -134,7 +134,7 @@ Thinking choices use local capability evidence, consistent with `doctor`'s conse
 
 Create clones every managed role from its template and registers the new profile in the manifest. New names cannot use reserved actions including `edit` or overwrite an existing file. Cancelled dialogs write nothing. Saving requires valid assignments for every role and explicit confirmation; it writes only `models.<profile>.json` and, for Create, the manifest. It never writes active `models.json`, `subagents.json`, session model/thinking, or reloads Pi. Only allowlisted identity/name/reasoning/thinking-map metadata enters the editor; SDK model objects, credentials, headers, and endpoints are not persisted.
 
-If the manifest or any loaded named profile changes while the editor is open, saving fails without writing. Reopen `/jb-odd-models edit` to load the current files and retry. The editor compares original file bytes, so formatting-only changes also count as drift. These are optimistic checks, not a lock: an external writer can still race in the small interval between the checks and writes. Individual files are replaced atomically, but creating a profile and registering it is not a crash-safe multi-file transaction. Avoid simultaneous file edits or installs while saving.
+If the manifest or any loaded named profile changes while the editor is open, saving fails without writing. Reopen `/jb:odd-models edit` to load the current files and retry. The editor compares original file bytes, so formatting-only changes also count as drift. These are optimistic checks, not a lock: an external writer can still race in the small interval between the checks and writes. Individual files are replaced atomically, but creating a profile and registering it is not a crash-safe multi-file transaction. Avoid simultaneous file edits or installs while saving.
 
 ## Balance a profile with the current model
 
@@ -144,13 +144,13 @@ Balance is available only in the interactive terminal UI (`ctx.mode === "tui"`);
 
 ### Quick path
 
-1. Run `/jb-odd-models edit` and choose **Balance**. Opening the editor or choosing View/Edit/Create never runs inference.
+1. Run `/jb:odd-models edit` and choose **Balance**. Opening the editor or choosing View/Edit/Create never runs inference.
 2. Choose a **reference profile**. Its assignments are the "before" column and the starting point; reference models that are no longer available must be replaced by the proposal.
 3. Choose **Automatic balanced defaults**, or **Customize** to pick a priority (`balanced`, `quality`, `budget`, `latency`) and optional free-text task/risk context.
 4. Read the consent dialog and confirm. Pi shows a loader; press Escape to cancel.
 5. Review the preview: every managed role, including configured judges, with before → after model/thinking and a short rationale.
 6. Continue, enter a new profile name, and confirm Save.
-7. Activate it separately with `/jb-odd-models <name>` if you want it. Activation changes shared configuration as described in [Scope](#scope-shared-files-caller-only-live-changes).
+7. Activate it separately with `/jb:odd-models <name>` if you want it. Activation changes shared configuration as described in [Scope](#scope-shared-files-caller-only-live-changes).
 
 ### What is consulted and sent
 
@@ -197,7 +197,7 @@ Balance refuses rather than trimming when inputs are too large: more than 256 av
 
 ## Export a credential-available model catalog
 
-Optionally export a credential-available catalog for inspection or headless tooling. Interactive `/jb-odd-models edit` uses the invoking live registry instead:
+Optionally export a credential-available catalog for inspection or headless tooling. Interactive `/jb:odd-models edit` uses the invoking live registry instead:
 
 ```bash
 npm run export:model-catalog
@@ -223,13 +223,13 @@ The exporter deliberately omits credentials, headers, URLs, auth status, and arb
 
 ## Add a registered profile
 
-Prefer `/jb-odd-models edit` to create or change a profile from the invoking Pi registry. To add a third profile such as `local` by hand, keep the same active managed-agent coverage as existing profiles:
+Prefer `/jb:odd-models edit` to create or change a profile from the invoking Pi registry. To add a third profile such as `local` by hand, keep the same active managed-agent coverage as existing profiles:
 
 1. Add `{ "name": "local", "modelsFile": "models.local.json" }` to `model-profiles.manifest.json`.
 2. Create `models.local.json` with exactly every agent listed under the manifest's `managedAgentGroups` plus the configured `oppositeProviderJudges.agents` when that block is enabled.
 3. Use `{ "model": "provider/model", "thinking": "max" }` for each agent, choosing an effort appropriate for that model. The package accepts any nonempty, already-trimmed effort string and copies it verbatim; it does not trim, lowercase, whitelist, or downgrade values. Direct switching rejects nonstandard `orchestrator` thinking before mutation; other agents' efforts remain unrestricted and the installed runtime or provider may reject unsupported levels even after a successful switch.
 4. Restart or reinstall so the installed manifest/profile files are copied into Pi home.
-5. Inspect with `/jb-odd-models preview local` and `/jb-odd-models doctor`; run `/jb-odd-models list` when ready to pick and activate a profile.
+5. Inspect with `/jb:odd-models preview local` and `/jb:odd-models doctor`; run `/jb:odd-models list` when ready to pick and activate a profile.
 
 Profile names must be safe lowercase command names: start with a lowercase letter, use lowercase letters/digits separated by single `-` or `.` segments, and cannot use reserved command names such as `status`, `list`, `preview`, `doctor`, `undo`, `recover`, or `edit`.
 

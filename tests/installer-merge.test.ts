@@ -277,8 +277,8 @@ test("dynamic third profile installs and the installed command can status and sw
     getThinkingLevel: () => thinkingLevel,
     setThinkingLevel: (level: string) => { thinkingLevel = level; },
   }, { piHome });
-  assert.deepEqual([...commands.keys()], ["jb-odd-models"]);
-  const command = commands.get("jb-odd-models");
+  assert.deepEqual([...commands.keys()], ["jb:odd-models"]);
+  const command = commands.get("jb:odd-models");
   assert.ok(command);
   const notifications: Array<{ message: string; level: string }> = [];
   let reloads = 0;

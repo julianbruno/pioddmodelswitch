@@ -2,7 +2,7 @@
 
 ## Executive conclusion
 
-`/jb-odd-models <profile>` changes **shared model-routing configuration** and updates the **invoking Pi session**. It is not a session-isolated profile selector. Other Pi instances sharing the same `PI_HOME` can observe the saved routing, but the command does not broadcast a reload or replace their live conversation model.
+`/jb:odd-models <profile>` changes **shared model-routing configuration** and updates the **invoking Pi session**. It is not a session-isolated profile selector. Other Pi instances sharing the same `PI_HOME` can observe the saved routing, but the command does not broadcast a reload or replace their live conversation model.
 
 **Delivery state:** W1 scope/status notices are implemented and independently verified. W2 subprocess harness lifecycle repairs are implemented, but acceptance remains partial pending independent verification of the final artifacts. W3–W5 are blocked on a supported installed Gentle integration contract for both child and reviewer routing. No session isolation is implemented within one Pi home.
 
@@ -28,7 +28,7 @@
 ### Example: two terminals
 
 1. Terminals A and B share the same `PI_HOME`.
-2. A executes `/jb-odd-models <profile>`.
+2. A executes `/jb:odd-models <profile>`.
 3. A changes its live orchestrator and shared routing files, then reloads when needed.
 4. B does not receive an explicit live-model change or reload from this command.
 5. B's later delegated work can resolve the changed shared routing, subject to its effective configuration and refresh path.
@@ -89,7 +89,7 @@ Pi branch-entry storage alone does not satisfy this contract. Installed Gentle c
 | [#1826](https://github.com/Gentleman-Programming/gentle-shell/pull/1826) | Adds follow mode, drift notice, and per-target routing infrastructure. | Merged |
 | [#1827](https://github.com/Gentleman-Programming/gentle-shell/pull/1827) | Integrates frozen session profiles into launches, status, and Usage. | Open |
 
-States above are a snapshot of the GitHub lookup during this investigation, not a release-availability guarantee. A merged helper PR does not prove end-to-end session isolation is shipped or used by `/jb-odd-models`.
+States above are a snapshot of the GitHub lookup during this investigation, not a release-availability guarantee. A merged helper PR does not prove end-to-end session isolation is shipped or used by `/jb:odd-models`.
 
 **Integration advice:** evaluate the complete upstream session-profile contract and installed release before building a competing mechanism. This custom command still needs explicit adaptation: upstream work alone does not make a command that writes shared files session-local.
 

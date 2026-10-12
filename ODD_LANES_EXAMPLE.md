@@ -30,9 +30,9 @@ Next steps:
        ~/miscodigos/pissdmodelswitch/scripts/pi-opus.sh
        ~/miscodigos/pissdmodelswitch/scripts/pi-gpt.sh
        ~/miscodigos/pissdmodelswitch/scripts/pi-grok.sh
-  2. Inside the opus instance run:  /jb-odd-models claude-opus-5.5
-     Inside the gpt instance run:   /jb-odd-models openai6-1-gentle
-     Inside the grok instance run:  /jb-odd-models grok-4-7
+  2. Inside the opus instance run:  /jb:odd-models claude-opus-5.5
+     Inside the gpt instance run:   /jb:odd-models openai6-1-gentle
+     Inside the grok instance run:  /jb:odd-models grok-4-7
 ```
 
 Re-running setup is safe: it only adds missing files and never overwrites lane files or writes into `~/.pi`.
@@ -71,18 +71,18 @@ Extra Pi flags pass through, for example `./scripts/pi-opus.sh --continue`.
 
 ```text
 # opus instance
-/jb-odd-models claude-opus-5.5
+/jb:odd-models claude-opus-5.5
 
 # gpt instance
-/jb-odd-models openai6-1-gentle
+/jb:odd-models openai6-1-gentle
 
 # grok instance
-/jb-odd-models grok-4-7
+/jb:odd-models grok-4-7
 ```
 
-Then confirm with `/jb-odd-models status`: it should show the lane's profile and no `[misaligned]` entries. The selection persists in that lane's home, so later launches keep it.
+Then confirm with `/jb:odd-models status`: it should show the lane's profile and no `[misaligned]` entries. The selection persists in that lane's home, so later launches keep it.
 
 ## Do not
 
-- Run `/jb-odd-models` in a plain `pi` (without a launcher) expecting it to affect a lane: it changes `~/.pi` instead.
+- Run `/jb:odd-models` in a plain `pi` (without a launcher) expecting it to affect a lane: it changes `~/.pi` instead.
 - Start a lane with plain `PI_HOME=... pi`: without the Gentle variables, Gentle applies the global `~/.pi/gentle-ai/models.json` to the lane's subagents.

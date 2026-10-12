@@ -1,6 +1,6 @@
 # Understand how model switching works
 
-`/jb-odd-models` keeps a human-facing canonical profile and the Gentle Pi runtime mapping aligned for the managed ODD agents and any configured judge/reviewer agents. Profile names, managed agents, and opposite-provider judge routing are read from `gentle-ai/model-profiles.manifest.json`; named profile data lives in `gentle-ai/models.<profile>.json`.
+`/jb:odd-models` keeps a human-facing canonical profile and the Gentle Pi runtime mapping aligned for the managed ODD agents and any configured judge/reviewer agents. Profile names, managed agents, and opposite-provider judge routing are read from `gentle-ai/model-profiles.manifest.json`; named profile data lives in `gentle-ai/models.<profile>.json`.
 
 ## Shared scope and live session
 
@@ -25,7 +25,7 @@ A mismatch does not identify its cause or prove what children or reviewers actua
 
 ```mermaid
 flowchart LR
-  C["/jb-odd-models <profile>"] --> M["model-profiles.manifest.json"]
+  C["/jb:odd-models <profile>"] --> M["model-profiles.manifest.json"]
   M --> P["models.<profile>.json"]
   P --> V["Validate exact managed-agent profile"]
   V --> O["Apply opposite-provider judge routing for paired profiles"]
@@ -43,15 +43,15 @@ Paths are relative to `PI_HOME`, which defaults to `~/.pi`. The extension also i
 
 | Command | Writes files | Reloads Pi | Purpose |
 |---|---:|---:|---|
-| `/jb-odd-models` | No | No | Status plus usage. |
-| `/jb-odd-models status` | No | No | Active-state and drift report. |
-| `/jb-odd-models doctor` | No | No | Read-only diagnostics for files, local catalog evidence, auth status evidence, and transaction journals/locks. |
-| `/jb-odd-models list` | No | No | Registered profiles from the manifest. |
-| `/jb-odd-models edit` | Named profile; manifest for Create/Balance only | No | View/Edit/Create using all invoking live auth-available models, or Balance with one consented current-model consultation; saving is not activation. |
-| `/jb-odd-models preview <profile>` | No | No | Before → after canonical/runtime mapping for each managed agent. |
-| `/jb-odd-models <profile>` | Yes, unless already aligned | Yes, only after writes | Activate a registered profile. |
-| `/jb-odd-models undo` | Yes, if safe | Yes, after undo | Revert the last completed transaction when no intervening edits exist. |
-| `/jb-odd-models recover` | Sometimes | Yes, after changed recovery | Finish, record, or clear an interrupted transaction from recorded safe states. |
+| `/jb:odd-models` | No | No | Status plus usage. |
+| `/jb:odd-models status` | No | No | Active-state and drift report. |
+| `/jb:odd-models doctor` | No | No | Read-only diagnostics for files, local catalog evidence, auth status evidence, and transaction journals/locks. |
+| `/jb:odd-models list` | No | No | Registered profiles from the manifest. |
+| `/jb:odd-models edit` | Named profile; manifest for Create/Balance only | No | View/Edit/Create using all invoking live auth-available models, or Balance with one consented current-model consultation; saving is not activation. |
+| `/jb:odd-models preview <profile>` | No | No | Before → after canonical/runtime mapping for each managed agent. |
+| `/jb:odd-models <profile>` | Yes, unless already aligned | Yes, only after writes | Activate a registered profile. |
+| `/jb:odd-models undo` | Yes, if safe | Yes, after undo | Revert the last completed transaction when no intervening edits exist. |
+| `/jb:odd-models recover` | Sometimes | Yes, after changed recovery | Finish, record, or clear an interrupted transaction from recorded safe states. |
 
 A switch that is already semantically aligned leaves bytes and mtimes untouched and does not call reload, even if the files use different JSON formatting. Direct selection still aligns the current Pi session to the effective selected `orchestrator` model and thinking; when both files and session already match, it makes no model call or reload.
 
@@ -80,7 +80,7 @@ Three standalone, unpaired profiles route every ODD role explicitly with `openai
 | Code | `gentle-ai-worker`, `jd-fix-agent` |
 | Light | `gentle-ai-explore` |
 
-These profiles are not in `config/named-profiles.json` and have no opposite-provider pair, so judges and reviewers keep the reasoning route above. Select one with `/jb-odd-models gpt-6-1-recommended` (or `gpt-6-1-lowcost` / `gpt-6-1-powerful`) after confirming both models are available through your Pi provider. The default profile stays `openaigentle`.
+These profiles are not in `config/named-profiles.json` and have no opposite-provider pair, so judges and reviewers keep the reasoning route above. Select one with `/jb:odd-models gpt-6-1-recommended` (or `gpt-6-1-lowcost` / `gpt-6-1-powerful`) after confirming both models are available through your Pi provider. The default profile stays `openaigentle`.
 
 ## Managed effort mapping
 
@@ -100,7 +100,7 @@ These are local capability checks, not provider requests or execution guarantees
 
 ## Live named-profile editor
 
-`/jb-odd-models edit` uses awaited `ctx.ui` select/input/confirm dialogs. Edit/Create obtain all models from the invoking `ctx.modelRegistry.getAvailable()`, including custom providers and models outside `ctx.scopedModels`. The installed extension facade is synchronous; awaiting its result also supports asynchronous adapters. The editor does not call refresh or auth/settings mutation methods. View/Edit/Create never call provider APIs; Balance makes one consented `streamSimple` call, described below.
+`/jb:odd-models edit` uses awaited `ctx.ui` select/input/confirm dialogs. Edit/Create obtain all models from the invoking `ctx.modelRegistry.getAvailable()`, including custom providers and models outside `ctx.scopedModels`. The installed extension facade is synchronous; awaiting its result also supports asynchronous adapters. The editor does not call refresh or auth/settings mutation methods. View/Edit/Create never call provider APIs; Balance makes one consented `streamSimple` call, described below.
 
 The live result is copied into plain allowlisted provider/ID/identity/name/reasoning/thinking-map metadata. Provider and model ID split at the first slash; nested model IDs remain verbatim. SDK objects and private provider configuration never enter persisted profile data. The exported `model-catalog.json` remains optional for headless export/inspection and installation; interactive editing neither reads it nor falls back to it.
 
@@ -112,7 +112,7 @@ Save requires confirmation and writes only the named `models.<profile>.json`; Cr
 
 Balance builds an allowlisted request from the chosen reference profile, every managed role, all live available models, and the selected criteria. It sends that request once through `ctx.modelRegistry.streamSimple()` with the session's current model and thinking level captured at the consultation boundary, `maxRetries: 0`, a 4,096-token output cap, an abort signal, and a 60-second timeout. Before consent it refuses current models whose output cap is unverified, including Codex Responses, `pi-virtual`, `pi-messages`, unknown APIs, providers whose streaming an extension supplies or overrides (native provider or custom `streamSimple`), and uninspectable registries. Config-only provider registrations using a built-in adapter are gated by their API.
 
-The reply is strictly validated; the before/after preview and confirmed Save then follow the same named-profile boundary as Create. Balance never activates, so shared canonical/runtime files and the live session change only through a later `/jb-odd-models <profile>`. The cap check is not token or cost accounting. See [Balance details](USAGE.md#balance-a-profile-with-the-current-model).
+The reply is strictly validated; the before/after preview and confirmed Save then follow the same named-profile boundary as Create. Balance never activates, so shared canonical/runtime files and the live session change only through a later `/jb:odd-models <profile>`. The cap check is not token or cost accounting. See [Balance details](USAGE.md#balance-a-profile-with-the-current-model).
 
 ## Files read and written
 

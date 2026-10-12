@@ -225,7 +225,7 @@ async function assertNoUnresolvedTransaction(piHome: string): Promise<void> {
   const activePath = join(journalDir, "active.json");
   const lockPath = join(journalDir, "lock.json");
   if (await exists(activePath)) {
-    fail("Model profile transaction state is unresolved; run /jb-odd-models recover before installing.");
+    fail("Model profile transaction state is unresolved; run /jb:odd-models recover before installing.");
   }
   if (await exists(lockPath)) {
     fail("Model profile transaction lock is present; wait for the switch/undo process or run recover before installing.");
@@ -312,7 +312,7 @@ async function backupChanged(
     await copyFile(plan.path, backup);
   }
   const legacyNote = legacy
-    ? `${relative(piHome, legacy.path)} is the retired predecessor extension, moved here by the installer; restoring it loads the retired command next to /jb-odd-models.\n`
+    ? `${relative(piHome, legacy.path)} is the retired predecessor extension, moved here by the installer; restoring it loads the retired command next to /jb:odd-models.\n`
     : "";
   await writeFile(join(backupRoot, "RESTORE.txt"), `Copy the saved files back to the same relative paths under PI_HOME. Files absent from this backup were created by the installer.\n${legacyNote}`, "utf8");
   return backupRoot;
@@ -364,7 +364,7 @@ export async function installModelProfiles(input: InstallOptions = {}): Promise<
   else log(`Active profile: ${selection.name}.`);
   if (legacy) log(`Retired predecessor extension moved to backup: ${relative(piHome, legacy.path)}`);
   if (backupRoot) log(`Backups: ${backupRoot}`);
-  log("Restart Pi, then run /jb-odd-models status.");
+  log("Restart Pi, then run /jb:odd-models status.");
   return {
     changed: true,
     backupRoot,

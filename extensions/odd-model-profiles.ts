@@ -61,7 +61,7 @@ type ProfileRuntimeState = {
   runtimeEntries: Partial<Record<string, RuntimeModelProfileEntry>>;
 };
 
-const COMMAND_NAME = "jb-odd-models";
+const COMMAND_NAME = "jb:odd-models";
 const STATIC_ACTIONS = ["status", "list", "preview", "doctor", "undo", "recover", "edit"] as const;
 const hasOwn = Object.prototype.hasOwnProperty;
 

@@ -172,7 +172,7 @@ async function createHarness() {
     setThinkingLevel: (level: string) => { thinkingCalls.push(level); thinking = level; },
   };
   oddModelProfiles(pi as any, { piHome });
-  const command = commands.get("jb-odd-models");
+  const command = commands.get("jb:odd-models");
   assert.ok(command);
 
   const notifications: Array<{ message: string; level: string }> = [];
@@ -252,7 +252,7 @@ for (const outcome of ["cancel", "empty", "unknown", "raw-name", "throw", "no-ui
     assert.equal(h.reloadCount(), 0);
     if (outcome === "no-ui" || outcome === "no-select") {
       assert.match(h.notifications.at(-1)!.message, /Registered ODD profiles/);
-      assert.match(h.notifications.at(-1)!.message, /\/jb-odd-models <profile>/);
+      assert.match(h.notifications.at(-1)!.message, /\/jb:odd-models <profile>/);
     } else if (outcome !== "cancel" && outcome !== "empty") {
       assert.equal(h.notifications.at(-1)?.level, "error");
       if (outcome === "throw") assert.match(h.notifications.at(-1)!.message, /picker.*dialog offline/i);

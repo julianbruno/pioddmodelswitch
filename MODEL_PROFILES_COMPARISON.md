@@ -4,8 +4,8 @@ Choose by configured role allocation, not by the profile name. This snapshot com
 
 ## Choose or inspect
 
-- `/jb-odd-models list` now opens a selectable activation picker when UI selection is supported. Choosing an option immediately activates its effective `orchestrator` model and thinking, corresponding to Pi's current `/model`; it does not select a reviewer model. Without UI/select support, the list is textual and read-only. Cancel changes nothing.
-- Use `/jb-odd-models preview <profile>` for read-only inspection, not the picker. Activation changes shared persisted configuration and aligns only the invoking live session; other sessions are not broadcast updates.
+- `/jb:odd-models list` now opens a selectable activation picker when UI selection is supported. Choosing an option immediately activates its effective `orchestrator` model and thinking, corresponding to Pi's current `/model`; it does not select a reviewer model. Without UI/select support, the list is textual and read-only. Cancel changes nothing.
+- Use `/jb:odd-models preview <profile>` for read-only inspection, not the picker. Activation changes shared persisted configuration and aligns only the invoking live session; other sessions are not broadcast updates.
 - See [command usage](USAGE.md) for validation, rollback, reload and availability behavior. Pi's built-in `/model` remains unchanged; no `/list` command is added.
 
 ## Reading the tables

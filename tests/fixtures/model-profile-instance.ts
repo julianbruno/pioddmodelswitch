@@ -1,4 +1,4 @@
-// Two-instance fixture for /jb-odd-models.
+// Two-instance fixture for /jb:odd-models.
 //
 // Parent side (imported by tests): seeds a disposable PI_HOME and spawns instance processes.
 // Child side (run as a script): loads the real extension default export with fake Pi APIs,
@@ -240,8 +240,8 @@ async function runChild(piHome: string): Promise<void> {
     setThinkingLevel: (level: string) => { thinkingCalls.push(level); thinking = level; },
   };
   oddModelProfiles(pi, { piHome });
-  const command = commands.get("jb-odd-models");
-  if (!command) throw new Error("jb-odd-models was not registered");
+  const command = commands.get("jb:odd-models");
+  if (!command) throw new Error("jb:odd-models was not registered");
   const ctx = {
     cwd: piHome,
     get model() { return current; },
