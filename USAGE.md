@@ -1,12 +1,67 @@
-# Use `/jb:odd-models`
+# Complete user guide: `/jb:odd-models`
 
-The command reports, previews, diagnoses, switches, undoes, recovers, or edits the global model profile used by the managed orchestrator, ODD generic agents, and configured judge/reviewer agents. Registered profile names and optional opposite-provider judge routing come from `model-profiles.manifest.json` instead of being hard-coded.
+Use this guide to install the plugin, inspect routing, activate profiles, and customize role assignments. The command manages shared saved configuration for the orchestrator, ODD generic agents, and configured judges/reviewers—not a private profile for each session. Registered names and optional opposite-provider judge routing come from the manifest.
+
+## Quick start
+
+1. Have Gentle Pi installed, an existing Pi home with `agent/`, Node.js 22.19.0 or newer, and Pi authentication configured for the intended providers. The installer does not install Pi or grant model access.
+2. From the repository, install:
+
+   ```sh
+   cd /path/to/pissdmodelswitch
+   ./install/install.sh
+   ```
+
+3. Restart Pi, or use Pi's `/reload` in an existing session to load the extension. Then inspect and preview:
+
+   ```text
+   /jb:odd-models status
+   /jb:odd-models doctor
+   /jb:odd-models preview openaigentle
+   ```
+
+4. If the preview is what you want, activate and check:
+
+   ```text
+   /jb:odd-models openaigentle
+   /jb:odd-models status
+   ```
+
+The packaged default is `openaigentle` (GPT-6 Sol/Luna). A reinstall preserves a canonical mapping that matches a profile in the **package's** registry; otherwise it selects the default. Do not assume an installed custom profile or edited packaged definition survives an update unchanged. Existing changed files are backed up under `$PI_HOME/backups/jb-odd-models-<timestamp>-<pid>/`; identical files produce no backup. Preserve custom definitions before reinstalling. See [installation and recovery](HOW_TO_INSTALL.md) for update, backup restore, and ownership checks.
+
+For a custom home, use the [lane environment](#run-three-independent-routing-lanes), not `PI_HOME` alone: Pi and Gentle also need their own home variables.
+
+## Contents
+
+- [Scope and managed roles](#scope-shared-files-caller-only-live-changes)
+- [Command reference](#command-reference)
+- [Inspect, diagnose, preview, and activate](#common-checks)
+- [Undo and recover](#undo-or-recover-a-switch)
+- [View, edit, and clone profiles](#edit-or-create-a-named-profile)
+- [Balance with consent](#balance-a-profile-with-the-current-model)
+- [Three routing lanes](#run-three-independent-routing-lanes)
+- [Troubleshooting and limits](#troubleshooting-and-limits)
+- [Optional catalog export](#export-a-credential-available-model-catalog)
+- [Manual profile registration](#add-a-registered-profile)
+- [Completion and extension layout](#completion)
+
+For profile definitions rather than a duplicated model catalog, consult the [manifest](config/model-profiles.manifest.json), [profile comparison](MODEL_PROFILES_COMPARISON.md), and [alias relationships](PROFILE_ALIAS_RELATIONSHIPS.md). Installed definitions and the invoking registry are the evidence for your installation.
 
 ## Scope: shared files, caller-only live changes
 
 This is not a session-local profile selector. Sessions using the same configuration paths share the saved canonical and runtime mappings. Selecting a profile changes those shared files and aligns the invoking live orchestrator; only the caller reloads. Other sessions are not observed, and their refresh timing is not guaranteed. No live broadcast or independent session routing is provided.
 
-To use different profiles at the same time, run each instance in a separate Pi home with the lane scripts; see [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes).
+The packaged manifest manages 13 roles:
+
+| Function | Roles |
+|---|---|
+| Coordinate | `orchestrator` |
+| Explore, implement, verify, fix | `gentle-ai-explore`, `gentle-ai-worker`, `gentle-ai-verify`, `jd-fix-agent` |
+| Review and judge | `review-risk`, `review-resilience`, `review-readability`, `review-reliability`, `review-refuter`, `review-validator`, `jd-judge-a`, `jd-judge-b` |
+
+Switches preserve unrelated canonical keys, runtime top-level keys, and unrelated `model_profiles` entries. The historical 13 retired `sdd-*` keys are removed during switching or installation. The manifest, not a fixed role count in the command, defines coverage.
+
+To use different profiles at the same time, run each instance in a separate Pi home; see [three routing lanes](#run-three-independent-routing-lanes).
 
 ## Model picker navigation
 
@@ -113,6 +168,29 @@ This profile is unpaired, so its judges also stay on Grok 4.7. The default remai
 
 On success, the notice names the shared canonical and runtime files changed, and only the invoking Pi session reloads for changed files. A file no-op reports shared files unchanged and the invoking orchestrator aligned, with no reload. If reload fails, shared persisted state remains applied and the caller's live orchestrator remains aligned: no rollback is performed. Run `/reload` manually or restart Pi. Undo/recovery change shared persisted state but do not establish live orchestrator alignment. The canonical profile uses `thinking`; the runtime mapping receives the same value as `effort`. Already-active files stay untouched, but direct selection still aligns the current session. Missing model/auth, unavailable rollback model, unsupported orchestrator thinking, and clamped thinking fail before file mutation. A later file-switch failure attempts session restoration and reports restoration errors.
 
+## Undo or recover a switch
+
+For an unwanted completed switch:
+
+```text
+/jb:odd-models doctor
+/jb:odd-models undo
+/jb:odd-models status
+```
+
+Undo targets only the last completed transaction, and only while both target files still match its recorded output bytes. It is not an arbitrary history restore or an undo for editor saves/installations. Even formatting-only external changes can prevent undo.
+
+After an interrupted switch, inspect first:
+
+```text
+/jb:odd-models doctor
+/jb:odd-models recover
+/jb:odd-models doctor
+/jb:odd-models status
+```
+
+Recover completes, records, or clears the interrupted transaction only for recognized safe byte states. It refuses unknown external edits and ambiguous locks; do not treat it as a force-overwrite command. Wait for a lock-owning process to exit before attempting recovery. Neither undo nor recovery guarantees live orchestrator alignment. After inspecting the recovered mapping, select the desired registered profile separately if you need to align the invoking model/thinking. Installer backups are a separate manual restoration mechanism; see [restore instructions](HOW_TO_INSTALL.md#uninstall-or-restore).
+
 ## Edit or create a named profile
 
 ```text
@@ -124,6 +202,33 @@ Pi dialogs offer **View**, **Edit**, **Create**, or **Balance** (see [Balance a 
 1. Choose Edit and a registered profile, or Create, a safe lowercase name, and an existing template.
 2. Choose a managed role, a live model, and a supported thinking level.
 3. Choose Save and confirm. This saves the named definition only; use `/jb:odd-models <profile>` separately to activate it.
+
+### Change one role, then activate separately
+
+For example, change the worker in the existing unpaired `openai6-1-gentle` profile:
+
+1. Run `/jb:odd-models edit` and choose **View**, then `openai6-1-gentle`, to inspect its saved assignments. View makes no changes.
+2. Run `/jb:odd-models edit` again; choose **Edit**, then `openai6-1-gentle`.
+3. Select the `gentle-ai-worker` row.
+4. In **Model**, use ↑/↓ to reach an auth-available model, then Enter to choose it. Escape cancels the draft without saving.
+5. In **Thinking level**, choose an offered supported level. You return to the role list; repeat for other roles only if needed.
+6. Choose **Save**, then confirm **Save profile?**. All roles must validate, including unchanged ones. Saving the named definition does **not** update active mappings, even when editing the currently active profile.
+7. Run `/jb:odd-models preview openai6-1-gentle` to inspect the effective change, then `/jb:odd-models openai6-1-gentle` to activate it. Check `/jb:odd-models status`.
+
+Changing the worker does not automatically change `jd-fix-agent`; edit that row too if you want them to match. For paired profiles, activation may replace saved judge rows with the paired profile's assignments; inspect the effective preview rather than assuming View shows the final routing.
+
+### Clone a custom profile
+
+To keep the original intact, run `/jb:odd-models edit`, choose **Create**, enter `my-worker` (an example new name, not a shipped profile), and choose `openai6-1-gentle` as **Template profile**. Every managed role is cloned. Edit the desired rows, choose **Save**, and confirm. Then preview and activate separately:
+
+```text
+/jb:odd-models preview my-worker
+/jb:odd-models my-worker
+```
+
+Use an unused safe lowercase name; if `my-worker` already exists, choose another. A new unpaired profile retains its own judge assignments. There is no delete or rename command.
+
+### Availability and save boundaries
 
 Model choices come from **all auth-available models in the invoking Pi registry** (`ctx.modelRegistry.getAvailable()`), including custom/provider-extension models. They are not filtered by `ctx.scopedModels`. No exported catalog is required or consulted. Availability is local registry/auth evidence, not provider reachability or account entitlement; the editor does not refresh the registry or mutate auth/settings. View, Edit, and Create never make provider calls; only Balance does, once, after explicit consent.
 
@@ -161,7 +266,7 @@ Balance is available only in the interactive terminal UI (`ctx.mode === "tui"`);
 | Item | Behavior |
 |---|---|
 | Consulted model | The **current session model and thinking level**, captured when you confirm the criteria, not when the editor opened. It is not the reference profile's `orchestrator`. |
-| Candidate models | All auth-available models in the invoking Pi registry, the same set Edit/Create offer. No silent filtering, subsetting, or alternate model. |
+| Candidate models | All auth-available models in the invoking Pi registry, the same identities Edit/Create offer. Balance follows Pi's reasoning capability contract by also offering `off`/`minimal` unless explicitly disabled; the manual editor uses the conservative policy above. No silent model filtering, subsetting, or alternate model. |
 | Sent data | Allowlisted model identities, display names and reasoning/thinking capabilities; reference role assignments with fixed role descriptions; priority and optional task/risk text; current model identity and thinking. |
 | Not sent as prompt data | Chat history, source files, your session system prompts, or credentials. Pi still authenticates to the provider normally. |
 | Instructions to the model | Treat all supplied text as data; use only listed models and supported thinking; choose effort by role and risk, not maximum everywhere; return strict JSON only. No tools, commands, or file writes. |
@@ -199,6 +304,58 @@ This check confirms that the selected adapter sends a cap; it is **not cost or t
 
 Balance refuses rather than trimming when inputs are too large: more than 256 available models or 64 roles, overlong names or criteria text (2,048 characters), serialized request data above 131,072 characters, or a request larger than its byte gate. The byte gate counts UTF-8 bytes of the request and system text and is at most 16,384 bytes, less if the current model's context window is small. Reply limits count JavaScript string characters (65,536 per reply, 1,024 per rationale), which are not bytes. Refusals write nothing and do not retry with fewer models.
 
+## Run three independent routing lanes
+
+Each lane gets its own saved routing, auth/settings copies, and session home. Run setup from the repository, then launch the lanes you need in separate terminals:
+
+```sh
+./scripts/setup-odd-lanes.sh
+./scripts/pi-opus.sh
+# In another terminal:
+./scripts/pi-gpt.sh
+# In another terminal:
+./scripts/pi-grok.sh
+```
+
+Setup seeds `~/.pi-opus`, `~/.pi-gpt`, and `~/.pi-grok` from `~/.pi`, installs the plugin, and does not activate a lane-specific profile or start Pi. Existing lane identity/state copies are retained; shared `npm`, `install`, and `bin` directories are symlinked, and source sessions are skipped. In the corresponding running lane select:
+
+| Lane | In-Pi command |
+|---|---|
+| opus | `/jb:odd-models claude-opus-5.5` |
+| gpt | `/jb:odd-models openai6-1-gentle` |
+| grok | `/jb:odd-models grok-4-7` |
+
+The launchers export all four home variables:
+
+```sh
+export PI_HOME=/path/to/lane-home
+export PI_CODING_AGENT_DIR="$PI_HOME/agent"
+export GENTLE_PI_AGENT_HOME="$PI_HOME/agent"
+export GENTLE_PI_CONFIG_HOME="$PI_HOME/gentle-ai"
+```
+
+This is also the environment pattern for manual launches after installing into that home. `PI_HOME` alone directs this plugin but does not relocate stock Pi or Gentle routing. Sessions sharing the same paths still share the last selected profile. Relaunch older lanes with the current launchers and re-select once if they previously loaded global routing.
+
+Override setup/launcher paths using `PI_LANE_SOURCE`, `PI_LANE_OPUS_HOME`, `PI_LANE_GPT_HOME`, and `PI_LANE_GROK_HOME`. For example, `PI_LANE_DRY_RUN=1 ./scripts/pi-grok.sh` prints the launch environment without starting Pi. These are routing lanes, not complete isolation: prompt history, skills, `/gentle:stats`, Engram, and pi-pretty's shared `fff` database remain shared. See [lane setup details](HOW_TO_INSTALL.md#two-concurrent-odd-lanes) and the [working example](ODD_LANES_EXAMPLE.md).
+
+## Troubleshooting and limits
+
+| Symptom | Safe next step |
+|---|---|
+| Command unknown after install | Reload/restart Pi; check the same home environment and that the helper directory is next to the extension. |
+| Old `/jb-odd-models` invocation fails | Use `/jb:odd-models`. Package 2.0.0 replaces the same `odd-model-profiles.ts`; there is no old-command alias. |
+| Older SDD extension blocks install | Follow the separate [historical migration](HOW_TO_INSTALL.md#upgrade-from-the-previous-command); unknown `sdd-model-profiles.ts` bytes are treated as user-owned. |
+| Saved state is `custom` or `unknown`, or rows are misaligned | Run `doctor`; inspect before selecting a registered profile. `custom` is a nonmatching saved mapping, not a session label. |
+| Model missing or auth unavailable | Check Pi's effective local registry/auth configuration. Exporting a catalog does not repair the editor. Local evidence cannot prove remote access. |
+| Save blocked by unavailable/unsupported rows | Explicitly replace every flagged assignment; no silent clamping or stale catalog fallback occurs. |
+| Save fails after concurrent changes | Reopen the editor. Avoid concurrent installs or external edits; Create is not a crash-safe multi-file transaction. |
+| Activation refused or thinking clamped | Choose a locally supported orchestrator with a standard Pi thinking level; inspect the restoration notice. Activation checks the orchestrator, not remote execution of every child. |
+| Reload fails after activation/undo/recovery | Persisted changes remain applied. Run `/reload` or restart, then inspect status; undo/recovery do not establish live alignment. |
+| Journal/lock or unknown bytes block mutation | Inspect `doctor`; use conservative recovery, not forced overwrites. Backups do not guarantee arbitrary history restoration. |
+| Balance unsupported, timed out, or rejected | Read its adapter and size limits above. Nothing is saved; no automatic retry or fallback occurs. |
+
+Manifest `schemaVersion: 2` describes the ODD-only configuration schema; it is **not** the package version 2.0.0 command-namespace migration. Neither a successful install, preview, doctor, nor switch proves child-agent routing, remote entitlement, or provider execution. No live broadcast, automatic provider repair, profile delete/rename command, or complete lane resource isolation is provided. See [switching internals](MODEL_SWITCHING.md), [architecture](ARCHITECTURE.md), and [provenance](NOTICE.md).
+
 ## Export a credential-available model catalog
 
 Optionally export a credential-available catalog for inspection or headless tooling. Interactive `/jb:odd-models edit` uses the invoking live registry instead:
@@ -227,12 +384,12 @@ The exporter deliberately omits credentials, headers, URLs, auth status, and arb
 
 ## Add a registered profile
 
-Prefer `/jb:odd-models edit` to create or change a profile from the invoking Pi registry. To add a third profile such as `local` by hand, keep the same active managed-agent coverage as existing profiles:
+Prefer `/jb:odd-models edit` to create or change a profile from the invoking Pi registry. To add a custom profile such as `local` (a placeholder name, not a shipped registration) by hand, keep the same active managed-agent coverage as existing profiles:
 
 1. Add `{ "name": "local", "modelsFile": "models.local.json" }` to `model-profiles.manifest.json`.
-2. Create `models.local.json` with exactly every agent listed under the manifest's `managedAgentGroups` plus the configured `oppositeProviderJudges.agents` when that block is enabled.
+2. Create `models.local.json` with exactly all managed roles: every agent listed under the manifest's `managedAgentGroups` plus every configured `oppositeProviderJudges.agents` entry, even when `oppositeProviderJudges.enabled` is `false`. The `enabled` flag governs opposite-provider pair routing, not required profile coverage; when disabled, configured judges retain the selected profile's own assignments.
 3. Use `{ "model": "provider/model", "thinking": "max" }` for each agent, choosing an effort appropriate for that model. The package accepts any nonempty, already-trimmed effort string and copies it verbatim; it does not trim, lowercase, whitelist, or downgrade values. Direct switching rejects nonstandard `orchestrator` thinking before mutation; other agents' efforts remain unrestricted and the installed runtime or provider may reject unsupported levels even after a successful switch.
-4. Restart or reinstall so the installed manifest/profile files are copied into Pi home.
+4. If editing package `config/` files, reinstall to copy them into Pi home, then reload/restart Pi. A restart alone does not copy package files. Alternatively, edit the installed manifest and named file together under `$PI_HOME/gentle-ai/`; avoid simultaneous writers and keep copies before an update.
 5. Inspect with `/jb:odd-models preview local` and `/jb:odd-models doctor`; run `/jb:odd-models list` when ready to pick and activate a profile.
 
 Profile names must be safe lowercase command names: start with a lowercase letter, use lowercase letters/digits separated by single `-` or `.` segments, and cannot use reserved command names such as `status`, `list`, `preview`, `doctor`, `undo`, `recover`, or `edit`.

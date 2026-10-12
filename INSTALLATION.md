@@ -1,6 +1,6 @@
 # Install `/jb:odd-models`
 
-This guide shows the shortest safe path to install the model-profile switch plugin into Pi.
+This guide shows the shortest safe path to install the model-profile switch plugin into Pi. Continue with the [complete user guide](USAGE.md) for inspection, activation, editing, Balance, and routing lanes.
 
 ## Quick install
 
@@ -41,7 +41,14 @@ The installer copies the command and profile data into Pi home:
 | `$PI_HOME/gentle-ai/models.json` | Derived active canonical profile |
 | `$PI_HOME/agent/subagents.json` | Merged runtime `model_profiles` entries |
 
-Unrelated JSON keys and unrelated `model_profiles` entries are preserved. Upgrading from `/jb-sdd-odd-models` retires its released extension file into the backup and removes its 13 retired routes; see [Upgrade from the previous command](HOW_TO_INSTALL.md#upgrade-from-the-previous-command).
+Unrelated JSON keys and unrelated `model_profiles` entries are preserved. Reinstall preserves canonical mappings matching the package registry; unmatched custom mappings fall back to its default. Installed custom registrations/edits are not automatically merged, so preserve copies before updating.
+
+## Two distinct migrations
+
+- **Historical SDD retirement:** upgrading from `/jb-sdd-odd-models` moves a recognized released `sdd-model-profiles.ts` into the backup and removes exactly its 13 retired `sdd-*` routes. Unknown extension bytes stop installation for ownership review.
+- **Package 2.0.0 namespace change:** `/jb-odd-models` becomes `/jb:odd-models` by replacing the same `odd-model-profiles.ts` and its helpers. Update saved invocations and reload/restart Pi. Package name `jb-odd-models`, installed paths, and backup prefix are unchanged.
+
+Neither old command remains an alias. Manifest `schemaVersion: 2` describes ODD-only configuration coverage, not package version 2.0.0. See [migration and preservation details](HOW_TO_INSTALL.md#upgrade-from-the-previous-command).
 
 ## Custom `PI_HOME`
 

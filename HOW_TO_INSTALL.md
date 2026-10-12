@@ -1,6 +1,6 @@
 # Install and recover `/jb:odd-models`
 
-Run the included installer from this package. It validates package data, backs up existing files that will change, installs the command plus helper layout, and merges only the managed ODD runtime mappings.
+Run the included installer from this package. It validates package data, backs up existing files that will change, installs the command plus helper layout, and merges only the managed ODD runtime mappings. For every command and practical workflow, use the [complete user guide](USAGE.md).
 
 ## Prerequisites
 
@@ -31,12 +31,18 @@ Existing unrelated canonical keys, unrelated top-level runtime keys, and unrelat
 
 ### Custom Pi home
 
-Set `PI_HOME` during installation **and whenever Pi runs**:
+For installation, `PI_HOME` selects the target only. For a live launch, align all four plugin, Pi, and Gentle home variables:
 
 ```sh
 PI_HOME=/srv/my-pi ./install/install.sh
-PI_HOME=/srv/my-pi pi
+export PI_HOME=/srv/my-pi
+export PI_CODING_AGENT_DIR="$PI_HOME/agent"
+export GENTLE_PI_AGENT_HOME="$PI_HOME/agent"
+export GENTLE_PI_CONFIG_HOME="$PI_HOME/gentle-ai"
+pi
 ```
+
+Keep these exports in the launching terminal whenever Pi runs; `PI_HOME` alone does not relocate stock Pi or Gentle routing.
 
 The target must already contain `agent/`; this prevents accidentally installing into an arbitrary directory. The extension defaults to `~/.pi` when `PI_HOME` is unset.
 
@@ -87,15 +93,24 @@ Backups retain paths relative to `PI_HOME`. Newly created files have no prior co
 
 ## Upgrade from the previous command
 
-Version 2 of the manifest manages only ODD, orchestrator, and review/judge agents. The command is now `/jb:odd-models`; the previous `/jb-sdd-odd-models` command is not kept as an alias. Run the installer once from this package to upgrade:
+There are two distinct historical migrations; neither old command is retained as an alias:
+
+| Migration | Extension handling |
+|---|---|
+| Older `/jb-sdd-odd-models` → ODD-only command | Retires released `sdd-model-profiles.ts` into the backup and removes exactly the 13 retired `sdd-*` routes. |
+| Package 2.0.0: `/jb-odd-models` → `/jb:odd-models` | Replaces the same `odd-model-profiles.ts` and updates helpers in place; no separate extension retirement. Update saved invocations and reload/restart Pi. |
+
+Manifest `schemaVersion: 2` defines ODD, orchestrator, and review/judge coverage. It is independent of package version 2.0.0, which changes the command namespace. Package name `jb-odd-models`, installed paths, and backup prefix remain unchanged. Run the installer once from this package; historical SDD ownership checks and active-profile handling are:
 
 | Existing state | Installer action |
 |---|---|
 | `agent/extensions/sdd-model-profiles.ts` matches a released copy of this package byte for byte | Moves it into the backup directory so Pi no longer loads the old command. |
 | That file exists but differs from every released copy, or is not a regular file | Stops before writing anything. Review the file, move it out of `agent/extensions/` yourself, then rerun the installer. |
 | `models.json` or `subagents.json` contain the 13 retired `sdd-*` routes | Removes exactly those keys. Other custom keys, including similarly named ones, are kept. |
-| Active mappings match a registered profile | Keeps that profile active. |
-| Active mappings match no registered profile | Activates the default profile and reports this; the previous files are in the backup. |
+| Canonical mappings match a profile in the package registry | Keeps that profile active and derives runtime mappings from it. |
+| Canonical mappings match no profile in the package registry | Activates the default profile and reports this; the previous changed files are in the backup. |
+
+Installed custom registrations and locally edited named definitions are not automatically merged into the package manifest during reinstall. Save copies before updating; an unmatched custom active mapping falls back to the package default. Identically named package files may replace local edits, with changed existing bytes backed up.
 
 The shared helper directory `agent/extensions/model-profiles/` stays in place and is updated for the new command.
 
