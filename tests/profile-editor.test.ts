@@ -18,6 +18,40 @@ import {
   type ProfileEditorUI,
 } from "../extensions/model-profiles/editor.ts";
 
+test("model dialog delegates only model choices and cancellation never writes", async () => {
+  const h = await createEditorHarness();
+  const before = await snapshotTree(h.root);
+  const script = scriptedUi(["Edit", "openai", (_title, options) => options?.find(option => option.startsWith("orchestrator:")), undefined]);
+  let called = 0;
+  script.ui.selectModel = async options => {
+    called++;
+    assert.equal(options[0], modelChoice(h.liveModels.find(model => model.model === "openai-codex/orchestrator")!));
+    assert.ok(options.includes(modelChoice(h.liveModels.at(-1)!)));
+    return undefined;
+  };
+  const result = await runProfileEditor(script.ui, { gentleDir: h.gentleDir, manifestPath: h.manifestPath, catalogPath: h.catalogPath }, undefined, { getAvailable: () => h.liveModels });
+  assert.equal(called, 1);
+  assert.equal(result.wrote, false);
+  assert.deepEqual(await snapshotTree(h.root), before);
+});
+
+for (const selection of ["other/shared", "unknown/shared"]) test(`model callback validates exact identity ${selection}`, async () => {
+  const h = await createEditorHarness();
+  h.liveModels.push(catalogEntry("other", "shared", "Same label"), catalogEntry("another", "shared", "Same label"));
+  const beforeActive = await readFile(h.canonicalPath, "utf8");
+  const valid = selection === "other/shared";
+  const script = scriptedUi(["Edit", "openai", (_title, options) => options?.find(option => option.startsWith("orchestrator:")), ...(valid ? ["low", SAVE_OPTION, true] : [undefined])]);
+  script.ui.selectModel = async choices => {
+    assert.ok(choices.includes("other/shared — Same label"));
+    assert.ok(choices.includes("another/shared — Same label"));
+    return `${selection} — Same label`;
+  };
+  const result = await runProfileEditor(script.ui, { gentleDir: h.gentleDir, manifestPath: h.manifestPath, catalogPath: h.catalogPath }, undefined, { getAvailable: () => h.liveModels });
+  assert.equal(result.wrote, valid);
+  assert.equal((await readJson(join(h.gentleDir, "models.openai.json"))).orchestrator.model, valid ? selection : "openai-codex/orchestrator");
+  assert.equal(await readFile(h.canonicalPath, "utf8"), beforeActive);
+});
+
 const agents = ["orchestrator", "gentle-ai-explore", "review-risk"];
 const date = "2026-01-01T00:00:00.000Z";
 

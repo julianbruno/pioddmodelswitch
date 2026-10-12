@@ -40,6 +40,7 @@ export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhig
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
 export type ProfileEditorUI = {
+  selectModel?(options: string[]): Promise<string | undefined>;
   select(title: string, options: string[]): Promise<string | undefined>;
   confirm(title: string, message: string): Promise<boolean>;
   input(title: string, placeholder?: string): Promise<string | undefined>;
@@ -302,7 +303,7 @@ async function pickModel(ui: ProfileEditorUI, catalog: ModelCatalog, current?: s
   const options = currentChoice
     ? [modelChoice(currentChoice), ...choices.filter((choice) => choice !== modelChoice(currentChoice))]
     : choices;
-  const selected = await ui.select("Model", options);
+  const selected = await (ui.selectModel ? ui.selectModel(options) : ui.select("Model", options));
   if (!selected) return undefined;
   return catalog.models.find((model) => modelChoice(model) === selected)?.model;
 }

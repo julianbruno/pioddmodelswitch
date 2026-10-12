@@ -8,6 +8,10 @@ This is not a session-local profile selector. Sessions using the same configurat
 
 To use different profiles at the same time, run each instance in a separate Pi home with the lane scripts; see [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes).
 
+## Model picker navigation
+
+In `/jb:odd-models edit`, the interactive **Model** dialog uses a bounded native list that adapts to terminal height. Use ↑/↓ to scroll through every available model, Enter to choose, or Esc to cancel. Fullscreen Pi can also route mouse-wheel events to this list; regular terminals retain their own mouse/scrollback behavior. RPC and UIs without custom components retain the standard selection dialog. Other editor dialogs are unchanged. Cancelling writes nothing; saving a named profile does not activate it.
+
 ## Command reference
 
 | Input | Effect |

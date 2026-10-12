@@ -32,6 +32,7 @@ import {
   type ModelProfileTransactionTargets,
 } from "./model-profiles/transaction.ts";
 import { runProfileEditor } from "./model-profiles/editor.ts";
+import { selectModel } from "./model-profiles/model-selector.ts";
 
 export type ModelProfileExtensionOptions = {
   piHome?: string;
@@ -764,7 +765,15 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
           return;
         }
         try {
-          await runProfileEditor(ui, {
+          await runProfileEditor({
+            select: (title, options) => ui.select(title, options),
+            confirm: (title, message) => ui.confirm(title, message),
+            input: (title, placeholder) => ui.input(title, placeholder),
+            notify: (message, type) => ui.notify(message, type),
+            ...(ctx.mode === "tui" && typeof ui.custom === "function"
+              ? { selectModel: (options: string[]) => selectModel(ui, options) }
+              : {}),
+          }, {
             gentleDir: paths.gentleDir,
             manifestPath: paths.manifestPath,
             catalogPath: join(paths.gentleDir, "model-catalog.json"),

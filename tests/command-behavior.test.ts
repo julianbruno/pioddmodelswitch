@@ -817,8 +817,10 @@ test("recover reload failure keeps recovered shared files and reports live align
   assert.deepEqual(harness.session(), { model: { provider: "openai-codex", id: "orchestrator" }, thinking: "high" });
 });
 
-test("registered editor uses all invoking live models, not scoped models, and saves without activation", async () => {
+for (const mode of ["tui", "rpc"]) test(`registered editor ${mode} fallback uses all invoking live models and saves without activation`, async () => {
   const h = await createHarness();
+  h.ctx.mode = mode;
+  if (mode === "rpc") (h.ctx.ui as any).custom = () => { throw new Error("RPC custom must not be called"); };
   const saved = await readJson(join(h.gentleDir, "models.openai.json"));
   const live = Object.values(saved).map((entry: any) => {
     const slash = entry.model.indexOf("/");
