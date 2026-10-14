@@ -1,0 +1,925 @@
+import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join, resolve, sep } from "node:path";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+
+import {
+  deriveCanonicalProfileForSelection,
+  deriveRuntimeConfigForSelection,
+  deriveRuntimeModelProfilesForSelection,
+  hasRetiredManagedAgents,
+  isJsonObject,
+  isModelIdentifier,
+  managedAgents,
+  registeredProfileNames,
+  RETIRED_MANAGED_AGENTS,
+  validateManifest,
+  validateProfileSet,
+  withoutRetiredManagedAgents,
+  type JsonObject,
+  type ModelEffort,
+  type ModelProfileEntry,
+  type ModelProfilesManifest,
+  type RuntimeModelProfileEntry,
+  type ValidatedModelProfile,
+} from "./model-profiles/core.ts";
+import {
+  inspectModelProfileTransactions,
+  recoverModelProfileTransaction,
+  runModelProfileTransaction,
+  undoLastModelProfileTransaction,
+  type ModelProfileTransactionTargets,
+} from "./model-profiles/transaction.ts";
+import { runProfileEditor } from "./model-profiles/editor.ts";
+import {
+  alignGentleProfileStore,
+  bindGentleSessionProfile,
+  readGentleProfileStore,
+  type GentleProfileStore,
+  type GentleRouting,
+} from "./model-profiles/gentle-profiles.ts";
+import { selectModel } from "./model-profiles/model-selector.ts";
+
+export type ModelProfileExtensionOptions = {
+  piHome?: string;
+  gentleDir?: string;
+  canonicalPath?: string;
+  runtimePath?: string;
+  manifestPath?: string;
+};
+
+type ResolvedPaths = {
+  piHome: string;
+  gentleDir: string;
+  canonicalPath: string;
+  runtimePath: string;
+  manifestPath: string;
+  gentleProfilesPath: string;
+};
+
+type ProfileRegistry = {
+  manifest: ModelProfilesManifest;
+  profiles: Record<string, ValidatedModelProfile>;
+};
+
+type ProfileRuntimeState = {
+  canonical: JsonObject;
+  runtime: JsonObject;
+  canonicalEntries: Partial<Record<string, ModelProfileEntry>>;
+  runtimeEntries: Partial<Record<string, RuntimeModelProfileEntry>>;
+};
+
+const COMMAND_NAME = "jb:odd-models";
+// Gentle profile name for applied routing that matches no registered profile (after undo or recovery).
+const UNREGISTERED_GENTLE_PROFILE = "jb-odd-models";
+const STATIC_ACTIONS = ["status", "list", "preview", "doctor", "undo", "recover", "edit"] as const;
+const hasOwn = Object.prototype.hasOwnProperty;
+
+function hasOwnKey(value: JsonObject, key: string): boolean {
+  return hasOwn.call(value, key);
+}
+
+function resolvePaths(options: ModelProfileExtensionOptions = {}): ResolvedPaths {
+  const piHome = resolve(options.piHome ?? process.env.PI_HOME ?? join(homedir(), ".pi"));
+  const gentleDir = resolve(options.gentleDir ?? join(piHome, "gentle-ai"));
+  return {
+    piHome,
+    gentleDir,
+    canonicalPath: resolve(options.canonicalPath ?? join(gentleDir, "models.json")),
+    runtimePath: resolve(options.runtimePath ?? join(piHome, "agent", "subagents.json")),
+    manifestPath: resolve(options.manifestPath ?? join(gentleDir, "model-profiles.manifest.json")),
+    gentleProfilesPath: join(gentleDir, "profiles.json"),
+  };
+}
+
+function assertWithin(root: string, candidate: string, label: string): string {
+  const resolvedRoot = resolve(root);
+  const resolvedCandidate = resolve(candidate);
+  if (resolvedCandidate !== resolvedRoot && !resolvedCandidate.startsWith(`${resolvedRoot}${sep}`)) {
+    throw new Error(`${label} must stay inside ${resolvedRoot}.`);
+  }
+  return resolvedCandidate;
+}
+
+function profilePath(paths: ResolvedPaths, modelsFile: string, profileName: string): string {
+  if (modelsFile !== `models.${profileName}.json`) {
+    throw new Error(`Profile ${profileName} modelsFile must be models.${profileName}.json.`);
+  }
+  return assertWithin(paths.gentleDir, join(paths.gentleDir, modelsFile), `Profile ${profileName} path`);
+}
+
+function parseJsonObject(text: string, label: string, path: string): JsonObject {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${label} is not valid JSON (${path}): ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!isJsonObject(parsed)) throw new Error(`${label} must contain a JSON object (${path}).`);
+  return parsed;
+}
+
+async function readJsonObject(path: string, label: string): Promise<JsonObject> {
+  return parseJsonObject(await readFile(path, "utf8"), label, path);
+}
+
+function readJsonObjectSync(path: string, label: string): JsonObject {
+  return parseJsonObject(readFileSync(path, "utf8"), label, path);
+}
+
+async function loadRegistry(paths: ResolvedPaths): Promise<ProfileRegistry> {
+  const manifest = validateManifest(await readJsonObject(assertWithin(paths.gentleDir, paths.manifestPath, "Manifest path"), "Model profile manifest"));
+  const profileInputs: JsonObject = Object.create(null);
+  for (const registration of manifest.profiles) {
+    profileInputs[registration.name] = await readJsonObject(
+      profilePath(paths, registration.modelsFile, registration.name),
+      `Profile ${registration.name}`,
+    );
+  }
+  return { manifest, profiles: validateProfileSet(profileInputs, manifest) };
+}
+
+function loadManifestForCompletions(paths: ResolvedPaths): ModelProfilesManifest | undefined {
+  try {
+    return validateManifest(readJsonObjectSync(assertWithin(paths.gentleDir, paths.manifestPath, "Manifest path"), "Model profile manifest"));
+  } catch {
+    return undefined;
+  }
+}
+
+function exactKeys(value: JsonObject, expected: readonly string[], label: string): void {
+  const keys = Object.keys(value);
+  const missing = expected.filter((key) => !hasOwnKey(value, key));
+  const extra = keys.filter((key) => !expected.includes(key));
+  if (missing.length || extra.length || keys.length !== expected.length) {
+    const details = [
+      missing.length ? `missing: ${missing.join(", ")}` : "",
+      extra.length ? `extra: ${extra.join(", ")}` : "",
+    ].filter(Boolean).join("; ");
+    throw new Error(`${label} must contain exactly ${expected.length} expected keys${details ? ` (${details})` : ""}.`);
+  }
+}
+
+function validateModel(value: unknown, label: string): string {
+  if (typeof value !== "string" || value !== value.trim() || !isModelIdentifier(value)) {
+    throw new Error(`${label} must be a non-empty provider/model identifier.`);
+  }
+  return value;
+}
+
+function validateEffort(value: unknown, label: string): ModelEffort {
+  if (typeof value !== "string" || !value || value !== value.trim()) {
+    throw new Error(`${label} must be a non-empty, trimmed string.`);
+  }
+  return value;
+}
+
+function validateCanonicalEntry(value: unknown, label: string): ModelProfileEntry {
+  if (!isJsonObject(value)) throw new Error(`${label} must be a JSON object.`);
+  exactKeys(value, ["model", "thinking"], label);
+  return {
+    model: validateModel(value.model, `${label}.model`),
+    thinking: validateEffort(value.thinking, `${label}.thinking`),
+  };
+}
+
+function validateRuntimeEntry(value: unknown, label: string): RuntimeModelProfileEntry {
+  if (!isJsonObject(value)) throw new Error(`${label} must be a JSON object.`);
+  exactKeys(value, ["model", "effort"], label);
+  return {
+    model: validateModel(value.model, `${label}.model`),
+    effort: validateEffort(value.effort, `${label}.effort`),
+  };
+}
+
+function validateActiveState(
+  canonical: JsonObject,
+  runtime: JsonObject,
+  manifest: ModelProfilesManifest,
+  options: { allowMissingManagedEntries: boolean },
+): ProfileRuntimeState {
+  const agents = managedAgents(manifest);
+  const canonicalEntries: Partial<Record<string, ModelProfileEntry>> = Object.create(null);
+  const runtimeEntries: Partial<Record<string, RuntimeModelProfileEntry>> = Object.create(null);
+
+  if (!isJsonObject(runtime.model_profiles)) {
+    throw new Error("subagents.json.model_profiles must be a JSON object.");
+  }
+
+  for (const agent of agents) {
+    if (hasOwnKey(canonical, agent)) {
+      canonicalEntries[agent] = validateCanonicalEntry(canonical[agent], `models.json.${agent}`);
+    } else if (!options.allowMissingManagedEntries) {
+      throw new Error(`models.json.${agent} is missing.`);
+    }
+
+    if (hasOwnKey(runtime.model_profiles, agent)) {
+      runtimeEntries[agent] = validateRuntimeEntry(runtime.model_profiles[agent], `model_profiles.${agent}`);
+    } else if (!options.allowMissingManagedEntries) {
+      throw new Error(`model_profiles.${agent} is missing.`);
+    }
+  }
+
+  return { canonical, runtime, canonicalEntries, runtimeEntries };
+}
+
+async function readActiveState(paths: ResolvedPaths, manifest: ModelProfilesManifest, allowMissingManagedEntries: boolean): Promise<ProfileRuntimeState> {
+  const [canonical, runtime] = await Promise.all([
+    readJsonObject(paths.canonicalPath, "Active canonical profile"),
+    readJsonObject(paths.runtimePath, "Runtime configuration"),
+  ]);
+  return validateActiveState(canonical, runtime, manifest, { allowMissingManagedEntries });
+}
+
+function runtimeProfilesObject(runtime: JsonObject): JsonObject {
+  if (!isJsonObject(runtime.model_profiles)) throw new Error("subagents.json.model_profiles must be a JSON object.");
+  return runtime.model_profiles;
+}
+
+function selectedProfile(registry: ProfileRegistry, name: string): ValidatedModelProfile | undefined {
+  return hasOwnKey(registry.profiles, name) ? registry.profiles[name] : undefined;
+}
+
+function usage(manifest?: ModelProfilesManifest): string {
+  const profilePart = manifest ? registeredProfileNames(manifest).join("|") : "<profile>";
+  return `Usage: /${COMMAND_NAME} status|list|preview <profile>|doctor|undo|recover|edit|${profilePart}`;
+}
+
+function formatCanonicalEntry(entry: ModelProfileEntry | undefined): string {
+  return entry ? `${entry.model} (${entry.thinking})` : "(missing)";
+}
+
+function formatRuntimeEntry(entry: RuntimeModelProfileEntry | undefined): string {
+  return entry ? `${entry.model} (${entry.effort})` : "(missing)";
+}
+
+function hasRetiredState(state: ProfileRuntimeState): boolean {
+  return hasRetiredManagedAgents(state.canonical) || hasRetiredManagedAgents(runtimeProfilesObject(state.runtime));
+}
+
+function profileMatchesState(state: ProfileRuntimeState, profile: ValidatedModelProfile, manifest: ModelProfilesManifest): boolean {
+  for (const agent of managedAgents(manifest)) {
+    const canonical = state.canonicalEntries[agent];
+    const runtime = state.runtimeEntries[agent];
+    const expected = profile[agent];
+    if (!canonical || !runtime) return false;
+    if (canonical.model !== expected.model || canonical.thinking !== expected.thinking) return false;
+    if (runtime.model !== expected.model || runtime.effort !== expected.thinking) return false;
+  }
+  return true;
+}
+
+function scopeText(paths: ResolvedPaths): string[] {
+  return [
+    "Scope: shared persisted configuration (not session-local).",
+    `Canonical source: ${paths.canonicalPath}`,
+    `Runtime source: ${paths.runtimePath} (persisted model_profiles, not live agents)`,
+    "Other sessions are not observed; refresh timing is not guaranteed.",
+  ];
+}
+
+function liveStatusText(model: DoctorCommandContext["model"], thinking: string, state?: ProfileRuntimeState): string[] {
+  const identifier = model ? `${model.provider}/${model.id}` : undefined;
+  const canonical = state?.canonicalEntries.orchestrator;
+  const runtime = state?.runtimeEntries.orchestrator;
+  const compare = (entry: ModelProfileEntry | RuntimeModelProfileEntry | undefined): string => {
+    if (!identifier || !entry) return "unknown";
+    const effort = "thinking" in entry ? entry.thinking : entry.effort;
+    return identifier === entry.model && thinking === effort ? "match" : "mismatch";
+  };
+  return [
+    `Invoking live orchestrator: ${identifier ? `${identifier} (${thinking})` : `unavailable (thinking ${thinking})`} [source: ctx.model + pi.getThinkingLevel()]`,
+    `Live vs canonical: ${compare(canonical)}; live vs runtime: ${compare(runtime)}`,
+  ];
+}
+
+async function statusText(paths: ResolvedPaths, model: DoctorCommandContext["model"], thinking: string, includeUsage = false): Promise<string> {
+  let manifest: ModelProfilesManifest | undefined;
+  try {
+    const registry = await loadRegistry(paths);
+    manifest = registry.manifest;
+    const state = await readActiveState(paths, registry.manifest, false);
+
+    let active = "custom";
+    for (const name of registeredProfileNames(registry.manifest)) {
+      const profile = selectedProfile(registry, name);
+      if (profile && profileMatchesState(state, deriveCanonicalProfileForSelection(name, registry.profiles, registry.manifest), registry.manifest)) active = name;
+    }
+
+    const mapping = managedAgents(registry.manifest).map((agent) => {
+      const source = state.canonicalEntries[agent]!;
+      const runtime = state.runtimeEntries[agent]!;
+      const drift = source.model === runtime.model && source.thinking === runtime.effort ? "" : " [misaligned]";
+      return `${agent}: ${source.model} (${source.thinking}) [canonical]; runtime ${runtime.model} (${runtime.effort})${drift}`;
+    });
+    return [includeUsage ? usage(registry.manifest) : "", ...scopeText(paths), `Persisted ODD profile: ${active}`, `Active ODD profile: ${active} (shared persisted mapping; not live session)`, ...liveStatusText(model, thinking, state), ...mapping].filter(Boolean).join("\n");
+  } catch (error) {
+    return [includeUsage ? usage(manifest) : "", ...scopeText(paths), "Persisted ODD profile: unknown", "Active ODD profile: unknown (shared persisted mapping; not live session)", ...liveStatusText(model, thinking), error instanceof Error ? error.message : String(error)]
+      .filter(Boolean)
+      .join("\n");
+  }
+}
+
+function listText(registry: ProfileRegistry): string {
+  const lines = ["Registered ODD profiles:"];
+  for (const name of registeredProfileNames(registry.manifest)) {
+    lines.push(`- ${name}${name === registry.manifest.defaultProfile ? " (default)" : ""}`);
+  }
+  return lines.join("\n");
+}
+
+async function previewText(paths: ResolvedPaths, name: string): Promise<string> {
+  const registry = await loadRegistry(paths);
+  const profile = selectedProfile(registry, name);
+  if (!profile) return `Unknown profile: ${name}\n${usage(registry.manifest)}`;
+
+  const state = await readActiveState(paths, registry.manifest, true);
+  const nextProfile = deriveCanonicalProfileForSelection(name, registry.profiles, registry.manifest);
+  const nextRuntimeProfiles = deriveRuntimeModelProfilesForSelection(name, registry.profiles, registry.manifest);
+  const lines = [`Preview ODD profile: ${name}`, "No files will be written."];
+  for (const agent of managedAgents(registry.manifest)) {
+    const afterCanonical = nextProfile[agent];
+    const afterRuntime = nextRuntimeProfiles[agent];
+    lines.push(
+      `${agent}: canonical ${formatCanonicalEntry(state.canonicalEntries[agent])} -> ${formatCanonicalEntry(afterCanonical)}; runtime ${formatRuntimeEntry(state.runtimeEntries[agent])} -> ${formatRuntimeEntry(afterRuntime)}`,
+    );
+  }
+  return lines.join("\n");
+}
+
+type DoctorCommandContext = {
+  cwd?: string;
+  modelRegistry?: {
+    find(provider: string, modelId: string): unknown;
+    getProviderAuthStatus?(provider: string): { configured: boolean; source?: string; label?: string };
+    getProviderDisplayName?(provider: string): string;
+  };
+  model?: { provider: string; id: string };
+  thinkingLevel?: string;
+};
+
+type DoctorActiveState = ProfileRuntimeState & {
+  diagnostics: string[];
+  valid: boolean;
+  unrelatedRuntimeMappings: string[];
+};
+
+function inspectActiveStateForDoctor(canonical: JsonObject, runtime: JsonObject, manifest: ModelProfilesManifest): DoctorActiveState {
+  const agents = managedAgents(manifest);
+  const managed = new Set(agents);
+  const canonicalEntries: Partial<Record<string, ModelProfileEntry>> = Object.create(null);
+  const runtimeEntries: Partial<Record<string, RuntimeModelProfileEntry>> = Object.create(null);
+  const diagnostics: string[] = [];
+  let valid = true;
+
+  const runtimeProfiles = isJsonObject(runtime.model_profiles) ? runtime.model_profiles : undefined;
+  if (!runtimeProfiles) {
+    diagnostics.push("subagents.json.model_profiles must be a JSON object.");
+    valid = false;
+  }
+
+  for (const agent of agents) {
+    if (hasOwnKey(canonical, agent)) {
+      try {
+        canonicalEntries[agent] = validateCanonicalEntry(canonical[agent], `models.json.${agent}`);
+      } catch (error) {
+        diagnostics.push(error instanceof Error ? error.message : String(error));
+        valid = false;
+      }
+    } else {
+      diagnostics.push(`models.json.${agent} is missing.`);
+      valid = false;
+    }
+
+    if (runtimeProfiles && hasOwnKey(runtimeProfiles, agent)) {
+      try {
+        runtimeEntries[agent] = validateRuntimeEntry(runtimeProfiles[agent], `model_profiles.${agent}`);
+      } catch (error) {
+        diagnostics.push(error instanceof Error ? error.message : String(error));
+        valid = false;
+      }
+    } else {
+      diagnostics.push(`model_profiles.${agent} is missing.`);
+      valid = false;
+    }
+  }
+
+  const retired = new Set<string>(RETIRED_MANAGED_AGENTS);
+  const unrelatedRuntimeMappings = runtimeProfiles
+    ? Object.keys(runtimeProfiles).filter((key) => !managed.has(key) && !retired.has(key)).sort()
+    : [];
+  return { canonical, runtime, canonicalEntries, runtimeEntries, diagnostics, valid, unrelatedRuntimeMappings };
+}
+
+function splitModelIdentifier(identifier: string): { provider: string; modelId: string } | undefined {
+  const separator = identifier.indexOf("/");
+  if (separator <= 0 || separator === identifier.length - 1) return undefined;
+  return { provider: identifier.slice(0, separator), modelId: identifier.slice(separator + 1) };
+}
+
+function supportsEffort(model: unknown, effort: ModelEffort): boolean {
+  if (!isJsonObject(model) || model.reasoning !== true) return false;
+  const map = isJsonObject(model.thinkingLevelMap) ? model.thinkingLevelMap : undefined;
+  if (map && hasOwnKey(map, effort) && map[effort] === null) return false;
+  // Preserve baseline diagnostics; extended/model-specific levels require explicit evidence.
+  if (effort === "low" || effort === "medium" || effort === "high") return true;
+  return !!map && hasOwnKey(map, effort) && map[effort] !== null && map[effort] !== undefined;
+}
+
+async function doctorText(paths: ResolvedPaths, ctx: DoctorCommandContext): Promise<{ text: string; level: "info" | "warning" }> {
+  const info: string[] = [];
+  const issues: string[] = [];
+  let registry: ProfileRegistry | undefined;
+  let state: DoctorActiveState | undefined;
+
+  try {
+    registry = await loadRegistry(paths);
+  } catch (error) {
+    issues.push(`Registered profile issue: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (registry) {
+    try {
+      const [canonical, runtime] = await Promise.all([
+        readJsonObject(paths.canonicalPath, "Active canonical profile"),
+        readJsonObject(paths.runtimePath, "Runtime configuration"),
+      ]);
+      state = inspectActiveStateForDoctor(canonical, runtime, registry.manifest);
+      issues.push(...state.diagnostics);
+
+      let active = "unknown";
+      if (state.valid) {
+        active = "custom";
+        for (const name of registeredProfileNames(registry.manifest)) {
+          const profile = selectedProfile(registry, name);
+          if (profile && profileMatchesState(state, deriveCanonicalProfileForSelection(name, registry.profiles, registry.manifest), registry.manifest)) active = name;
+        }
+      }
+      info.push(`Active ODD profile: ${active}`);
+
+      for (const agent of managedAgents(registry.manifest)) {
+        const canonical = state.canonicalEntries[agent];
+        const runtime = state.runtimeEntries[agent];
+        if (canonical && runtime && (canonical.model !== runtime.model || canonical.thinking !== runtime.effort)) {
+          issues.push(`Drift: ${agent} canonical ${canonical.model} (${canonical.thinking}) != runtime ${runtime.model} (${runtime.effort})`);
+        }
+      }
+
+      const retiredMappings = RETIRED_MANAGED_AGENTS.filter((agent) =>
+        hasOwnKey(canonical, agent) || (isJsonObject(runtime.model_profiles) && hasOwnKey(runtime.model_profiles, agent)));
+      if (retiredMappings.length) {
+        info.push(`Retired legacy mappings present: ${retiredMappings.join(", ")}; the next profile switch or install removes them.`);
+      }
+      if (state.unrelatedRuntimeMappings.length) {
+        info.push(`Unrelated runtime mappings preserved: ${state.unrelatedRuntimeMappings.join(", ")}`);
+      }
+    } catch (error) {
+      issues.push(`Active state issue: ${error instanceof Error ? error.message : String(error)}`);
+      info.push("Active ODD profile: unknown");
+    }
+  } else {
+    info.push("Active ODD profile: unknown");
+  }
+
+  try {
+    const transaction = await inspectModelProfileTransactions(transactionTargets(paths));
+    for (const diagnostic of transaction.diagnostics) {
+      if (diagnostic.area === "active") issues.push(`Active transaction journal is malformed: ${diagnostic.message}`);
+      if (diagnostic.area === "history") issues.push(`Transaction history is malformed: ${diagnostic.message}`);
+    }
+    if (transaction.active) info.push(`Transaction: active ${transaction.active.operation} ${transaction.active.phase}`);
+    if (transaction.lock.state === "present") issues.push(`Transaction lock is present for pid ${transaction.lock.pid ?? "unknown"}; doctor will not reclaim it.`);
+    if (transaction.lock.state === "ambiguous") issues.push(`Transaction lock is ambiguous: ${transaction.lock.reason}`);
+  } catch (error) {
+    issues.push(`Transaction inspection failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  const registryApi = ctx.modelRegistry;
+  if (!registryApi) {
+    info.push("Pi model registry unavailable; catalog, auth, and effort checks skipped.");
+    info.push("Doctor cannot establish provider authentication or execution from files alone.");
+  } else if (registry && state) {
+    const providers = new Set<string>();
+    const seenModels = new Set<string>();
+    for (const agent of managedAgents(registry.manifest)) {
+      const entry = state.runtimeEntries[agent] ?? (state.canonicalEntries[agent] ? { model: state.canonicalEntries[agent]!.model, effort: state.canonicalEntries[agent]!.thinking } : undefined);
+      if (!entry || seenModels.has(`${entry.model}#${entry.effort}`)) continue;
+      seenModels.add(`${entry.model}#${entry.effort}`);
+      const parsed = splitModelIdentifier(entry.model);
+      if (!parsed) continue;
+      providers.add(parsed.provider);
+      const model = registryApi.find(parsed.provider, parsed.modelId);
+      if (!model) {
+        issues.push(`Catalog: ${entry.model} is not in the effective local catalog; this is a bounded local diagnostic, not proof remote unavailable.`);
+        continue;
+      }
+      if (supportsEffort(model, entry.effort)) {
+        info.push(`Catalog: ${entry.model} found, effort ${entry.effort} compatible.`);
+      } else {
+        issues.push(`Effort: ${entry.model} does not advertise ${entry.effort} support in the effective local catalog.`);
+      }
+    }
+
+    if (providers.size && registryApi.getProviderAuthStatus) {
+      for (const provider of [...providers].sort()) {
+        const status = registryApi.getProviderAuthStatus(provider);
+        if (status.configured) {
+          info.push(`Provider auth: ${provider} configured${status.source ? ` (${status.source})` : ""}.`);
+        } else {
+          issues.push(`Provider auth: ${provider} is not configured in the effective session; this does not prove remote unavailable.`);
+        }
+      }
+    } else {
+      info.push("Provider auth status API unavailable; auth checks skipped.");
+    }
+  }
+
+  if (ctx.model) info.push(`Current Pi session model: ${ctx.model.provider}/${ctx.model.id}${ctx.thinkingLevel ? ` (${ctx.thinkingLevel})` : ""}.`);
+  info.push("Installed/global profile status does not prove effective project routing; project overrides and session registry scope can change the model catalog used by Pi.");
+  info.push("Doctor cannot establish provider authentication or provider execution; it performs only local file, registry, and transaction inspection.");
+  info.push("Doctor is read-only; no files were repaired or reclaimed.");
+
+  const header = issues.length ? "Doctor summary: issues found" : "Doctor summary: no blocking errors";
+  const text = [header, ...issues.map((line) => `ERROR: ${line}`), ...info].join("\n");
+  return { text, level: issues.length ? "warning" : "info" };
+}
+
+function serialized(value: JsonObject): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function transactionTargets(paths: ResolvedPaths): ModelProfileTransactionTargets {
+  return {
+    canonicalPath: paths.canonicalPath,
+    runtimePath: paths.runtimePath,
+    journalDir: join(paths.gentleDir, ".model-profiles-transactions"),
+  };
+}
+
+function assertNoTransactionHazardForNoop(inspection: Awaited<ReturnType<typeof inspectModelProfileTransactions>>): void {
+  if (inspection.active) throw new Error("A model profile transaction is already active; run recover before starting another mutation.");
+  if (inspection.lock.state === "present") {
+    const owner = inspection.lock.pid === undefined ? "an unknown pid" : `pid ${inspection.lock.pid}`;
+    throw new Error(`Model profile transaction lock is already held by ${owner}. Run recover only after that process exits.`);
+  }
+  if (inspection.lock.state === "ambiguous") throw new Error(`Model profile transaction lock is ambiguous: ${inspection.lock.reason}`);
+  const diagnostic = inspection.diagnostics[0];
+  if (diagnostic) throw new Error(`Model profile transaction ${diagnostic.area} is ambiguous: ${diagnostic.message}`);
+}
+
+async function switchProfile(paths: ResolvedPaths, name: string): Promise<"changed" | "noop"> {
+  const registry = await loadRegistry(paths);
+  const profile = selectedProfile(registry, name);
+  if (!profile) throw new Error(`Unknown profile: ${name}\n${usage(registry.manifest)}`);
+
+  const targets = transactionTargets(paths);
+  const preflightState = await readActiveState(paths, registry.manifest, true);
+  const selectedCanonicalProfile = deriveCanonicalProfileForSelection(name, registry.profiles, registry.manifest);
+  if (profileMatchesState(preflightState, selectedCanonicalProfile, registry.manifest) && !hasRetiredState(preflightState)) {
+    assertNoTransactionHazardForNoop(await inspectModelProfileTransactions(targets));
+    return "noop";
+  }
+
+  return runModelProfileTransaction(targets, {
+    operation: "switch",
+    plan: ({ canonicalContent, runtimeContent }) => {
+      const state = validateActiveState(
+        parseJsonObject(canonicalContent, "Active canonical profile", paths.canonicalPath),
+        parseJsonObject(runtimeContent, "Runtime configuration", paths.runtimePath),
+        registry.manifest,
+        { allowMissingManagedEntries: true },
+      );
+
+      const nextProfile = deriveCanonicalProfileForSelection(name, registry.profiles, registry.manifest);
+      if (profileMatchesState(state, nextProfile, registry.manifest) && !hasRetiredState(state)) return null;
+
+      const nextCanonical: JsonObject = { ...withoutRetiredManagedAgents(state.canonical), ...nextProfile };
+      const nextRuntime = deriveRuntimeConfigForSelection(name, registry.profiles, registry.manifest, state.runtime);
+      runtimeProfilesObject(nextRuntime);
+      return { canonicalContent: serialized(nextCanonical), runtimeContent: serialized(nextRuntime) };
+    },
+  });
+}
+
+function invokingSessionId(ctx: unknown): string | undefined {
+  const manager = (ctx as { sessionManager?: { getSessionId?(): unknown } }).sessionManager;
+  const id = typeof manager?.getSessionId === "function" ? manager.getSessionId() : undefined;
+  return typeof id === "string" && id.length > 0 ? id : undefined;
+}
+
+/**
+ * Align gentle-pi with the applied routing: bind the invoking session and, when a
+ * Gentle profile store exists, save the routing there as the active profile. The
+ * name is the preferred profile, else the registered profile the routing matches.
+ * Returns whether profiles.json changed.
+ */
+async function alignGentleProfiles(paths: ResolvedPaths, store: GentleProfileStore | undefined, sessionId: string | undefined, preferredName?: string): Promise<boolean> {
+  const registry = await loadRegistry(paths);
+  const state = await readActiveState(paths, registry.manifest, false);
+  const routing: GentleRouting = Object.fromEntries(managedAgents(registry.manifest).map((agent) => [agent, { ...state.canonicalEntries[agent]! }]));
+  const names = registeredProfileNames(registry.manifest);
+  const candidates = preferredName ? [preferredName, ...names] : names;
+  const name = candidates.find((candidate) => profileMatchesState(state, deriveCanonicalProfileForSelection(candidate, registry.profiles, registry.manifest), registry.manifest))
+    ?? UNREGISTERED_GENTLE_PROFILE;
+  if (sessionId) bindGentleSessionProfile(sessionId, name, routing);
+  return store ? alignGentleProfileStore(store, name, routing) : false;
+}
+
+/** Gentle alignment after undo or recovery: failures are reported, never rolled back. */
+async function alignGentleProfilesAfter(paths: ResolvedPaths, ctx: { ui: { notify(message: string, level: "info" | "warning" | "error"): void } }): Promise<void> {
+  try {
+    await alignGentleProfiles(paths, await readGentleProfileStore(paths.gentleProfilesPath), invokingSessionId(ctx));
+  } catch (error) {
+    ctx.ui.notify(`Gentle profile alignment failed (${error instanceof Error ? error.message : String(error)}); subagents may keep the previous Gentle profile until /gentle:profiles selects one.`, "warning");
+  }
+}
+
+function completionItems(paths: ResolvedPaths, prefix: string): Array<{ value: string; label: string }> | null {
+  const leftTrimmed = prefix.toLowerCase().replace(/^\s+/, "");
+  const normalized = leftTrimmed.trim();
+  const manifest = loadManifestForCompletions(paths);
+  const profileNames = manifest ? registeredProfileNames(manifest) : [];
+
+  if (leftTrimmed.startsWith("preview ")) {
+    const profilePrefix = leftTrimmed.slice("preview ".length).trim();
+    const previewItems = profileNames
+      .filter((name) => name.startsWith(profilePrefix))
+      .map((name) => ({ value: `preview ${name}`, label: `preview ${name} — Show before/after without writing` }));
+    return previewItems.length ? previewItems : null;
+  }
+
+  const options = [
+    { value: "status", label: "status — Show active profile and mapping" },
+    { value: "list", label: "list — Select and activate a shared profile (or list without UI)" },
+    { value: "preview", label: "preview <profile> — Show before/after without writing" },
+    { value: "doctor", label: "doctor — Diagnose profile files, local catalog, and transaction state without writing" },
+    { value: "undo", label: "undo — Revert the last completed profile transaction if files still match" },
+    { value: "recover", label: "recover — Finish or clear an interrupted profile transaction" },
+    { value: "edit", label: "edit — View, edit, or create a named profile" },
+    ...profileNames.map((name) => ({ value: name, label: `${name} — Activate ${name} profile` })),
+  ].filter(({ value }) => value.startsWith(normalized));
+  return options.length ? options : null;
+}
+
+function parseArgs(args: string): { kind: "status" | "list" | "doctor" | "undo" | "recover" | "edit" } | { kind: "preview" | "switch"; name: string } | { kind: "unknown"; value: string } {
+  const tokens = String(args ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return { kind: "status" };
+  if (tokens.length === 1 && tokens[0] === "status") return { kind: "status" };
+  if (tokens.length === 1 && tokens[0] === "list") return { kind: "list" };
+  if (tokens.length === 1 && tokens[0] === "doctor") return { kind: "doctor" };
+  if (tokens.length === 1 && tokens[0] === "undo") return { kind: "undo" };
+  if (tokens.length === 1 && tokens[0] === "recover") return { kind: "recover" };
+  if (tokens.length === 1 && tokens[0] === "edit") return { kind: "edit" };
+  if (tokens[0] === "preview" && tokens.length === 2) return { kind: "preview", name: tokens[1] };
+  if (tokens[0] === "preview") return { kind: "unknown", value: tokens.join(" ") };
+  if (tokens.length === 1 && !STATIC_ACTIONS.includes(tokens[0] as (typeof STATIC_ACTIONS)[number])) return { kind: "switch", name: tokens[0] };
+  return { kind: "unknown", value: tokens.join(" ") };
+}
+
+// Factory injection keeps terminal lifecycle tests offline; production uses Pi's
+// installed loader, which ctx.ui.custom disposes when done resolves the dialog.
+export async function balanceProgress<T>(
+  ui: ExtensionContext["ui"],
+  work: (signal: AbortSignal) => Promise<T>,
+  load = async () => (await import("@earendil-works/pi-coding-agent")).BorderedLoader,
+): Promise<T> {
+  const Loader = await load();
+  const result = await ui.custom<{ value: T } | { error: unknown }>((tui, theme, _kb, done) => {
+    const loader = new Loader(tui, theme, "Consulting current model — Escape to cancel");
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    loader.onAbort = onAbort;
+    loader.signal.addEventListener("abort", onAbort, { once: true });
+    if (loader.signal.aborted) controller.abort();
+    // Promise wrapping also cleans up when work throws synchronously.
+    Promise.resolve().then(() => work(controller.signal)).then(
+      value => { cleanup(); done({ value }); },
+      error => { cleanup(); done({ error }); },
+    );
+    function cleanup() {
+      loader.signal.removeEventListener("abort", onAbort);
+      loader.onAbort = undefined;
+      controller.abort();
+    }
+    return loader;
+  });
+  if ("error" in result) throw result.error;
+  return result.value;
+}
+
+export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfileExtensionOptions = {}): void {
+  const paths = resolvePaths(options);
+
+  pi.registerCommand(COMMAND_NAME, {
+    description: "Show shared persisted ODD mappings and the invoking live orchestrator, or change the shared profile.",
+    getArgumentCompletions: (prefix: string) => completionItems(paths, prefix),
+    handler: async (args, ctx) => {
+      let parsed = parseArgs(args);
+      if (parsed.kind === "status") {
+        ctx.ui.notify(await statusText(paths, ctx.model, pi.getThinkingLevel(), String(args ?? "").trim() === ""), "info");
+        return;
+      }
+      if (parsed.kind === "list") {
+        try {
+          const registry = await loadRegistry(paths);
+          if (!ctx.hasUI || typeof ctx.ui.select !== "function") {
+            ctx.ui.notify(`${listText(registry)}\nActivate directly with /${COMMAND_NAME} <profile> (shared configuration and current Pi model/thinking).`, "info");
+            return;
+          }
+          const options = new Map(registeredProfileNames(registry.manifest).map(name => {
+            const entry = deriveCanonicalProfileForSelection(name, registry.profiles, registry.manifest).orchestrator;
+            return [`${name} — ${formatCanonicalEntry(entry)}`, name] as const;
+          }));
+          let selection: string | undefined;
+          try {
+            selection = await ctx.ui.select(
+              "Activate shared ODD profile and set current Pi model/thinking",
+              [...options.keys()],
+            );
+          } catch (error) {
+            throw new Error(`Profile picker failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          if (selection === undefined || selection === "") return;
+          const name = options.get(selection);
+          if (!name) throw new Error("Unknown profile picker selection; no profile activated.");
+          // Resolve the exact displayed option into the existing activation path.
+          // That path reloads the registry after the dialog before any mutation.
+          parsed = { kind: "switch", name };
+        } catch (error) {
+          ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+          return;
+        }
+      }
+      if (parsed.kind === "preview") {
+        try {
+          const text = await previewText(paths, parsed.name);
+          ctx.ui.notify(text, text.startsWith("Unknown profile:") ? "warning" : "info");
+        } catch (error) {
+          ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+        return;
+      }
+      if (parsed.kind === "doctor") {
+        const result = await doctorText(paths, ctx as DoctorCommandContext);
+        ctx.ui.notify(result.text, result.level);
+        return;
+      }
+      if (parsed.kind === "undo") {
+        try {
+          await undoLastModelProfileTransaction(transactionTargets(paths));
+          await alignGentleProfilesAfter(paths, ctx);
+          ctx.ui.notify("Last ODD model profile transaction undone in shared persisted configuration. Only the invoking session reloads; live orchestrator alignment is not established by undo. Other sessions are not observed; refresh timing is not guaranteed. Reloading Pi...", "info");
+        } catch (error) {
+          ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+          return;
+        }
+        try {
+          await ctx.reload();
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          ctx.ui.notify(`Reload failed (${detail}), but the shared undo files remain applied; live orchestrator alignment is not established. Run /reload manually or restart Pi.`, "error");
+        }
+        return;
+      }
+      if (parsed.kind === "recover") {
+        let result: Awaited<ReturnType<typeof recoverModelProfileTransaction>>;
+        try {
+          result = await recoverModelProfileTransaction(transactionTargets(paths));
+        } catch (error) {
+          ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+          return;
+        }
+        if (result === "none") {
+          ctx.ui.notify("No model profile transaction needs recovery.", "info");
+          return;
+        }
+        await alignGentleProfilesAfter(paths, ctx);
+        ctx.ui.notify(`Model profile transaction recovery ${result} in shared persisted configuration. Only the invoking session reloads; live orchestrator alignment is not established by recovery. Other sessions are not observed; refresh timing is not guaranteed. Reloading Pi...`, "info");
+        try {
+          await ctx.reload();
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          ctx.ui.notify(`Reload failed (${detail}), but recovered shared profile files remain applied; live orchestrator alignment is not established. Run /reload manually or restart Pi.`, "error");
+        }
+        return;
+      }
+      if (parsed.kind === "edit") {
+        const ui = ctx.ui;
+        if (typeof ui.select !== "function" || typeof ui.confirm !== "function" || typeof ui.input !== "function") {
+          ctx.ui.notify("Profile editor needs an interactive or RPC UI.", "error");
+          return;
+        }
+        try {
+          await runProfileEditor({
+            select: (title, options) => ui.select(title, options),
+            confirm: (title, message) => ui.confirm(title, message),
+            input: (title, placeholder) => ui.input(title, placeholder),
+            notify: (message, type) => ui.notify(message, type),
+            ...(ctx.mode === "tui" && typeof ui.custom === "function"
+              ? { selectModel: (options: string[]) => selectModel(ui, options) }
+              : {}),
+          }, {
+            gentleDir: paths.gentleDir,
+            manifestPath: paths.manifestPath,
+            catalogPath: join(paths.gentleDir, "model-catalog.json"),
+          }, undefined, ctx.modelRegistry, ctx.mode === "tui" ? {
+            capture: () => ({ model: ctx.model, thinking: pi.getThinkingLevel() }),
+            streamSimple: (model, context, options) => ctx.modelRegistry.streamSimple(
+              model as Parameters<typeof ctx.modelRegistry.streamSimple>[0],
+              context as Parameters<typeof ctx.modelRegistry.streamSimple>[1],
+              options as Parameters<typeof ctx.modelRegistry.streamSimple>[2],
+            ),
+            progress: work => balanceProgress(ctx.ui, work),
+          } : undefined);
+        } catch (error) {
+          ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+        return;
+      }
+      if (parsed.kind === "unknown") {
+        ctx.ui.notify(`Unknown argument: ${parsed.value}\n${usage(loadManifestForCompletions(paths))}`, "warning");
+        return;
+      }
+
+      let switchResult: "changed" | "noop" = "noop";
+      let gentleChanged = false;
+      try {
+        const registry = await loadRegistry(paths);
+        if (!selectedProfile(registry, parsed.name)) throw new Error(`Unknown profile: ${parsed.name}\n${usage(registry.manifest)}`);
+        const entry = deriveCanonicalProfileForSelection(parsed.name, registry.profiles, registry.manifest).orchestrator;
+        if (!entry) throw new Error("Selected profile has no orchestrator entry.");
+        // Validate the Gentle store before any change, so an unrecognized one aborts cleanly.
+        const gentleStore = await readGentleProfileStore(paths.gentleProfilesPath);
+        const original = ctx.model;
+        if (!original) throw new Error("Current Pi session model unavailable for rollback.");
+        const originalThinking = pi.getThinkingLevel();
+        const levels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const satisfies readonly Parameters<ExtensionAPI["setThinkingLevel"]>[0][];
+        if (!levels.includes(entry.thinking as typeof levels[number])) throw new Error(`Orchestrator thinking '${entry.thinking}' is not a standard Pi thinking level.`);
+        const target = splitModelIdentifier(entry.model);
+        const model = target && ctx.modelRegistry.find(target.provider, target.modelId);
+        if (!model) throw new Error(`Orchestrator model ${entry.model} is missing from the Pi model registry.`);
+        const changedModel = original.provider !== target!.provider || original.id !== target!.modelId;
+        if (changedModel && !ctx.modelRegistry.find(original.provider, original.id)) throw new Error("Current Pi session model is missing from registry; rollback unavailable.");
+        const changedThinking = originalThinking !== entry.thinking;
+        let modelApplied = false;
+        let thinkingAttempted = false;
+        const restore = async (error: unknown): Promise<never> => {
+          const failures: string[] = [];
+          try {
+            if (modelApplied) {
+              const previous = ctx.modelRegistry.find(original.provider, original.id);
+              if (!previous || !await pi.setModel(previous)) failures.push("original model could not be restored");
+            }
+          } catch (cause) { failures.push(`original model restoration threw: ${String(cause)}`); }
+          try {
+            if (modelApplied || thinkingAttempted) {
+              pi.setThinkingLevel(originalThinking);
+              if (pi.getThinkingLevel() !== originalThinking) failures.push("original thinking could not be restored");
+            }
+          } catch (cause) { failures.push(`original thinking restoration threw: ${String(cause)}`); }
+          throw new Error(`${error instanceof Error ? error.message : String(error)}${failures.length ? `; session restoration failed: ${failures.join('; ')}` : modelApplied || thinkingAttempted ? "; original session restored" : ""}`);
+        };
+        try {
+          if (changedModel) {
+            if (!await pi.setModel(model)) throw new Error(`Pi could not activate ${entry.model} (authentication may be missing).`);
+            modelApplied = true;
+          }
+          if (changedModel || changedThinking) {
+            thinkingAttempted = true;
+            pi.setThinkingLevel(entry.thinking as typeof levels[number]);
+          }
+          if (pi.getThinkingLevel() !== entry.thinking) throw new Error(`Pi thinking readback differs from ${entry.thinking} (possibly clamped).`);
+          switchResult = await switchProfile(paths, parsed.name);
+        } catch (error) { await restore(error); }
+        // The switch is committed and the session aligned: a Gentle failure is reported, not rolled back.
+        try {
+          gentleChanged = await alignGentleProfiles(paths, gentleStore, invokingSessionId(ctx), parsed.name);
+        } catch (error) {
+          ctx.ui.notify(`Gentle profile alignment failed (${error instanceof Error ? error.message : String(error)}); subagents may keep the previous Gentle profile until /gentle:profiles selects one.`, "warning");
+        }
+      } catch (error) {
+        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        return;
+      }
+
+      if (switchResult === "noop") {
+        const gentleNote = gentleChanged ? `Gentle active profile updated in ${paths.gentleProfilesPath}; ` : "";
+        ctx.ui.notify(`ODD ${parsed.name} profile is already active in shared persisted configuration; shared files unchanged; ${gentleNote}invoking live orchestrator aligned; no reload needed. Other sessions are not observed; refresh timing is not guaranteed.`, "info");
+        return;
+      }
+      const changedFiles = [paths.canonicalPath, paths.runtimePath, ...(gentleChanged ? [paths.gentleProfilesPath] : [])].join("; ");
+      ctx.ui.notify(`ODD ${parsed.name} profile activated in shared persisted configuration. Shared files changed: ${changedFiles}. Invoking live orchestrator aligned. Only the invoking session reloads. Other sessions are not observed; refresh timing is not guaranteed. Reloading Pi...`, "info");
+      try {
+        await ctx.reload();
+        return;
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        ctx.ui.notify(
+          `Reload failed (${detail}), but the ${parsed.name} shared persisted state remains applied and the invoking live orchestrator remains aligned; no rollback was performed. Other sessions are not observed; refresh timing is not guaranteed. Run /reload manually or restart Pi.`,
+          "error",
+        );
+      }
+    },
+  });
+}

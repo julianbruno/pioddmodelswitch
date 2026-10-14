@@ -117,8 +117,8 @@ The historical totals above remain attributed prior verification. The lifecycle 
 ## Source map
 
 - `USAGE.md:3,9–17`: global scope and command reference.
-- `extensions/odd-model-profiles.ts:72–81,119–128`: configuration paths.
-- `extensions/odd-model-profiles.ts:535–565,713–773`: shared switch, live model/thinking alignment, and instance-local reload.
+- `extensions/jb-odd-model-profiles.ts:72–81,119–128`: configuration paths.
+- `extensions/jb-odd-model-profiles.ts:535–565,713–773`: shared switch, live model/thinking alignment, and instance-local reload.
 - `MODEL_SWITCHING.md`: data flow and reload behavior.
 - Installed `gentle-pi/extensions/gentle-ai.ts:2073–2110,2398–2400`: subagent routing and project/user configuration paths inspected by the explorer.
 

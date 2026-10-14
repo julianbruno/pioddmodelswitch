@@ -37,7 +37,7 @@ flowchart LR
   R --> T
 ```
 
-Paths are relative to `PI_HOME`, which defaults to `~/.pi`. The extension also imports helper modules from `extensions/model-profiles/`, so installed packages must ship that directory next to `extensions/odd-model-profiles.ts`.
+Paths are relative to `PI_HOME`, which defaults to `~/.pi`. The extension also imports helper modules from `extensions/model-profiles/`, so installed packages must ship that directory next to `extensions/jb-odd-model-profiles.ts`.
 
 ## Commands
 
@@ -122,6 +122,7 @@ The reply is strictly validated; the before/after preview and confirmed Save the
 | `gentle-ai/models.<profile>.json` | Yes | Yes | No | Named source profiles. |
 | `gentle-ai/models.json` | Yes | Yes | Yes | Active canonical mapping using `{ model, thinking }`. |
 | `agent/subagents.json` | Yes | Yes | Yes | Shared persisted runtime mapping under `model_profiles` using `{ model, effort }`. |
+| `gentle-ai/profiles.json` | No | Yes, only when it already exists | Yes, only when it already exists | Gentle Pi's saved profiles. The applied routing is saved under the profile name and marked `active`; other saved profiles are kept. A missing store is never created; an unrecognized one aborts a switch before any change. |
 | `gentle-ai/.model-profiles-transactions/*` | Doctor/recover/undo inspect | Yes | Yes | Lock, active journal, and history for safe two-file transactions. |
 
 When switching, unrelated top-level keys and unrelated `model_profiles` entries are retained. Only managed agent entries are replaced or added.
@@ -180,4 +181,11 @@ For each agent, status prints both persisted entries and `[misaligned]` when can
 
 ## Runtime boundary
 
-The switch does not launch agents itself. It supplies mappings for Gentle Pi's native agent runtime through `agent/subagents.json`. Provider authentication, project overrides, local catalog contents, and actual provider execution remain outside this package.
+The switch does not launch agents itself. It supplies mappings for Gentle Pi's native agent runtime through `agent/subagents.json`.
+
+Gentle Pi freezes the `active` profile of `gentle-ai/profiles.json` when a session starts, and that snapshot outranks `agent/subagents.json` for subagent launches, even after `/reload`. A switch, `undo`, or `recover` therefore also aligns Gentle Pi:
+
+- `gentle-ai/profiles.json`, when present, gets the applied routing as its active profile, so new sessions freeze it. The profile is named after the selected profile; after `undo` or `recover` it is named after the registered profile the restored routing matches, or `jb-odd-models` when none matches. A file no-op switch still repairs a stale active profile.
+- The invoking session is bound to the applied routing, as an Enter in `/gentle:profiles` does, so its subagents use it without a restart. Other open sessions keep their frozen snapshot until they restart or select a profile in `/gentle:profiles`.
+
+An alignment failure after `undo` or `recover`, or after a committed switch, is reported as a warning; the ODD files stay applied. Provider authentication, project overrides, local catalog contents, and actual provider execution remain outside this package.

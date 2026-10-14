@@ -343,7 +343,7 @@ Override setup/launcher paths using `PI_LANE_SOURCE`, `PI_LANE_OPUS_HOME`, `PI_L
 | Symptom | Safe next step |
 |---|---|
 | Command unknown after install | Reload/restart Pi; check the same home environment and that the helper directory is next to the extension. |
-| Old `/jb-odd-models` invocation fails | Use `/jb:odd-models`. Package 2.0.0 replaces the same `odd-model-profiles.ts`; there is no old-command alias. |
+| Old `/jb-odd-models` invocation fails | Use `/jb:odd-models`. Package 2.0.0 originally updated `odd-model-profiles.ts` in place; the later filename migration installs `jb-odd-model-profiles.ts`. There is no old-command alias. |
 | Older SDD extension blocks install | Follow the separate [historical migration](HOW_TO_INSTALL.md#upgrade-from-the-previous-command); unknown `sdd-model-profiles.ts` bytes are treated as user-owned. |
 | Saved state is `custom` or `unknown`, or rows are misaligned | Run `doctor`; inspect before selecting a registered profile. `custom` is a nonmatching saved mapping, not a session label. |
 | Model missing or auth unavailable | Check Pi's effective local registry/auth configuration. Exporting a catalog does not repair the editor. Local evidence cannot prove remote access. |
@@ -400,4 +400,4 @@ Argument completion is synchronous and manifest-backed. It offers `status`, `lis
 
 ## Installed extension files
 
-The installed extension imports helper modules from `extensions/model-profiles/`. Package or manual installs must include that directory next to `extensions/odd-model-profiles.ts`; the helper modules are not standalone auto-loaded extensions.
+The installed extension imports helper modules from `extensions/model-profiles/`. Package or manual installs must include that directory next to `extensions/jb-odd-model-profiles.ts`; the helper modules are not standalone auto-loaded extensions.

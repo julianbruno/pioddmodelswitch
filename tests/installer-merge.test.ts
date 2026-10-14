@@ -71,7 +71,7 @@ async function copyPackageFixture(): Promise<string> {
   for (const profile of manifest.profiles) {
     await copyFile(join("config", profile.modelsFile), join(root, "config", profile.modelsFile));
   }
-  await copyFile("extensions/odd-model-profiles.ts", join(root, "extensions", "odd-model-profiles.ts"));
+  await copyFile("extensions/jb-odd-model-profiles.ts", join(root, "extensions", "jb-odd-model-profiles.ts"));
   await copyTree("extensions/model-profiles", join(root, "extensions", "model-profiles"));
   await copyFile("install/install.sh", join(root, "install", "install.sh"));
   await copyFile("install/model-profiles-install.ts", join(root, "install", "model-profiles-install.ts"));
@@ -170,7 +170,7 @@ test("fresh temp install copies manifest, registered profiles, extension helpers
     (await readJson(join(piHome, "gentle-ai", "models.json")))["review-risk"],
     profiles[expectedReviewProfileName]["review-risk"],
   );
-  assert.equal(await exists(join(piHome, "agent", "extensions", "odd-model-profiles.ts")), true);
+  assert.equal(await exists(join(piHome, "agent", "extensions", "jb-odd-model-profiles.ts")), true);
   assert.equal(await exists(join(piHome, "agent", "extensions", "sdd-model-profiles.ts")), false);
   assert.deepEqual(result.retiredFiles, []);
   assert.equal(result.activeProfile, manifest.defaultProfile);
@@ -181,6 +181,8 @@ test("fresh temp install copies manifest, registered profiles, extension helpers
   assert.equal(await readFile(join(piHome, "agent", "extensions", "model-profiles", "model-selector.ts"), "utf8"), await readFile(new URL("../extensions/model-profiles/model-selector.ts", import.meta.url), "utf8"));
   // editor.ts imports balancing.ts; an omitted helper breaks the installed command.
   assert.equal(await exists(join(piHome, "agent", "extensions", "model-profiles", "balancing.ts")), true);
+  // The entrypoint imports gentle-profiles.ts to keep the Gentle active profile aligned.
+  assert.equal(await readFile(join(piHome, "agent", "extensions", "model-profiles", "gentle-profiles.ts"), "utf8"), await readFile(new URL("../extensions/model-profiles/gentle-profiles.ts", import.meta.url), "utf8"));
   assert.equal(await exists(join(piHome, "agent", "extensions", "core.ts")), false);
   assert.equal(await exists(join(piHome, "gentle-ai", "model-catalog.json")), false);
   assert.equal(await exists(join(piHome, "backups")), false);
@@ -254,7 +256,7 @@ test("dynamic third profile installs and the installed command can status and sw
   await runInstall(packageRoot, piHome);
   assert.deepEqual(await readJson(join(piHome, "gentle-ai", "models.local.json")), localProfile);
 
-  const imported = await import(`${join(piHome, "agent", "extensions", "odd-model-profiles.ts")}?${Date.now()}`);
+  const imported = await import(`${join(piHome, "agent", "extensions", "jb-odd-model-profiles.ts")}?${Date.now()}`);
   const commands = new Map<string, any>();
   const installedDefault = (await readJson(join(piHome, "gentle-ai", "models.json"))).orchestrator;
   const [defaultProvider, defaultId] = installedDefault.model.split("/");
@@ -402,7 +404,7 @@ test("installer moves a released predecessor extension into the backup and insta
   assert.ok(result.backupRoot);
   assert.equal(await readFile(join(result.backupRoot!, "agent", "extensions", "sdd-model-profiles.ts"), "utf8"), legacy);
   assert.match(await readFile(join(result.backupRoot!, "RESTORE.txt"), "utf8"), /agent\/extensions\/sdd-model-profiles\.ts is the retired predecessor extension/);
-  assert.equal(await readFile(join(piHome, "agent", "extensions", "odd-model-profiles.ts"), "utf8"), await readFile("extensions/odd-model-profiles.ts", "utf8"));
+  assert.equal(await readFile(join(piHome, "agent", "extensions", "jb-odd-model-profiles.ts"), "utf8"), await readFile("extensions/jb-odd-model-profiles.ts", "utf8"));
 
   const repeat = await runInstall(".", piHome);
   assert.equal(repeat.changed, false);
@@ -427,7 +429,7 @@ test("installer refuses an unreleased or non-regular predecessor extension befor
     assert.equal(await readFile(legacyPath, "utf8"), before, kind);
     assert.equal(await exists(join(piHome, "gentle-ai")), false, kind);
     assert.equal(await exists(join(piHome, "backups")), false, kind);
-    assert.equal(await exists(join(piHome, "agent", "extensions", "odd-model-profiles.ts")), false, kind);
+    assert.equal(await exists(join(piHome, "agent", "extensions", "jb-odd-model-profiles.ts")), false, kind);
   }
 });
 
@@ -459,4 +461,52 @@ test("installer copies an optional generated catalog when present and still inst
   await runInstall(packageRoot, piHomeWith);
   assert.deepEqual(await readJson(join(piHomeWith, "gentle-ai", "model-catalog.json")), catalog);
   assert.equal((await stat(join(piHomeWith, "gentle-ai", "model-catalog.json"))).mode & 0o777, 0o600);
+});
+
+const ODD_PREDECESSOR = new URL("./fixtures/odd-model-profiles-v2.txt", import.meta.url);
+const ODD_PREDECESSOR_HASH = "c30034f109e75a6c1bf6f9029a122d1927a957e3c196c860ac92be7664ef2e92";
+
+test("installer retires both known entrypoints without duplicate loading and preserves routing", async () => {
+  const piHome = await preparePiHome("installer-prefixed-migration");
+  await runInstall(".", piHome);
+  const canonical = await readFile(join(piHome, "gentle-ai", "models.json"));
+  const runtime = await readFile(join(piHome, "agent", "subagents.json"));
+  const old = await readFile(ODD_PREDECESSOR);
+  assert.equal(createHash("sha256").update(old).digest("hex"), ODD_PREDECESSOR_HASH);
+  const oldPath = join(piHome, "agent", "extensions", "odd-model-profiles.ts");
+  const sddPath = join(piHome, "agent", "extensions", "sdd-model-profiles.ts");
+  await writeFile(oldPath, old);
+  await writeFile(sddPath, await releasedLegacyExtension());
+  const result = await runInstall(".", piHome);
+  assert.deepEqual(new Set(result.retiredFiles), new Set([oldPath, sddPath]));
+  assert.equal(await exists(oldPath), false);
+  assert.equal(await exists(sddPath), false);
+  assert.deepEqual(await readFile(join(result.backupRoot!, "agent", "extensions", "odd-model-profiles.ts")), old);
+  assert.deepEqual(await readFile(join(piHome, "gentle-ai", "models.json")), canonical);
+  assert.deepEqual(await readFile(join(piHome, "agent", "subagents.json")), runtime);
+  const again = await runInstall(".", piHome);
+  assert.equal(again.changed, false);
+  const restore = await readFile(join(result.backupRoot!, "RESTORE.txt"), "utf8");
+  assert.match(restore, /absence does not establish whether a file was newly created/);
+});
+
+test("installer refuses modified or symlinked unprefixed entrypoint without writes", async () => {
+  for (const kind of ["modified", "symlink"]) {
+    const piHome = await preparePiHome(`installer-prefixed-${kind}`);
+    const oldPath = join(piHome, "agent", "extensions", "odd-model-profiles.ts");
+    await mkdir(dirname(oldPath), { recursive: true });
+    const bytes = await readFile(ODD_PREDECESSOR);
+    if (kind === "modified") await writeFile(oldPath, Buffer.concat([bytes, Buffer.from("// user change\n")]));
+    else {
+      const target = join(piHome, "custom.ts");
+      await writeFile(target, bytes);
+      await symlink(target, oldPath);
+    }
+    const before = await readFile(oldPath);
+    await assert.rejects(runInstall(".", piHome), /ownership is uncertain|not a regular file/);
+    assert.deepEqual(await readFile(oldPath), before);
+    assert.equal(await exists(join(piHome, "backups")), false);
+    assert.equal(await exists(join(piHome, "gentle-ai")), false);
+    assert.equal(await exists(join(piHome, "agent", "extensions", "jb-odd-model-profiles.ts")), false);
+  }
 });

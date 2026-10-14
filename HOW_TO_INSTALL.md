@@ -20,7 +20,7 @@ cd /path/to/pissdmodelswitch
 
 The installer writes:
 
-- `~/.pi/agent/extensions/odd-model-profiles.ts`
+- `~/.pi/agent/extensions/jb-odd-model-profiles.ts`
 - helper modules under `~/.pi/agent/extensions/model-profiles/`
 - `~/.pi/gentle-ai/model-profiles.manifest.json`
 - every profile registered by that manifest, including `openaigentle`, GPT-5.6, GPT Astra, GPT Astra-only, Grok lanes, and legacy alias files such as `models.openai.json` and `models.grok.json`
@@ -98,9 +98,9 @@ There are two distinct historical migrations; neither old command is retained as
 | Migration | Extension handling |
 |---|---|
 | Older `/jb-sdd-odd-models` → ODD-only command | Retires released `sdd-model-profiles.ts` into the backup and removes exactly the 13 retired `sdd-*` routes. |
-| Package 2.0.0: `/jb-odd-models` → `/jb:odd-models` | Replaces the same `odd-model-profiles.ts` and updates helpers in place; no separate extension retirement. Update saved invocations and reload/restart Pi. |
+| Package 2.0.0: `/jb-odd-models` → `/jb:odd-models` | Originally replaced the same `odd-model-profiles.ts` and updated helpers in place; that namespace-only release did not retire this entrypoint. Update saved invocations and reload/restart Pi. |
 
-Manifest `schemaVersion: 2` defines ODD, orchestrator, and review/judge coverage. It is independent of package version 2.0.0, which changes the command namespace. Package name `jb-odd-models`, installed paths, and backup prefix remain unchanged. Run the installer once from this package; historical SDD ownership checks and active-profile handling are:
+Manifest `schemaVersion: 2` defines ODD, orchestrator, and review/judge coverage. It is independent of package version 2.0.0, which changes the command namespace. The namespace-only release preserved package name `jb-odd-models`, installed paths, and backup prefix. The later [prefixed filename migration](#prefixed-extension-filename) changes the entrypoint path, but not the command or backup prefix. Run the installer once from this package; historical SDD ownership checks and active-profile handling are:
 
 | Existing state | Installer action |
 |---|---|
@@ -158,7 +158,9 @@ Recovery is intentionally conservative. If a noncooperating writer changed eithe
 
 ## Uninstall or restore
 
-There is no automated uninstall because removing shared JSON keys safely depends on changes made after installation.
+For complete isolated lane homes, use the [lane lifecycle guide](ODD_LANES_LIFECYCLE.md): `scripts/uninstall-odd-lanes.sh` previews archival, `--yes` archives, and `--delete --yes` permanently removes the homes without a backup. Stop all selected Pi instances first. This does not remove the shared Pi installation.
+
+Package-only uninstall from a retained home is still manual because removing shared JSON keys safely depends on changes made after installation.
 
 To restore a previous state:
 
@@ -169,3 +171,7 @@ To restore a previous state:
 5. Restart Pi and verify the desired runtime behavior.
 
 To uninstall without a complete restore, manually remove the extension and profile files, then remove only the managed `model_profiles` keys from `subagents.json`. Preserve every unrelated key and mapping.
+
+### Prefixed extension filename
+
+The installed entrypoint is now `agent/extensions/jb-odd-model-profiles.ts`, so Pi's extension list shows the `jb-` prefix. The public command remains `/jb:odd-models`. Reinstall with `./install/install.sh` and then restart Pi or run `/reload`. The installer moves recognized copies of the old `odd-model-profiles.ts` (and the older `sdd-model-profiles.ts`, if present) into its backup before completing the install. Unknown or locally modified predecessor files stop installation without writes; review them rather than deleting them blindly. Never restore a predecessor next to the new entrypoint: both would load.

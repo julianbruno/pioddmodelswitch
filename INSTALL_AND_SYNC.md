@@ -32,7 +32,7 @@ By default that is `~/.pi`.
 
 It writes or updates:
 
-- `~/.pi/agent/extensions/odd-model-profiles.ts`
+- `~/.pi/agent/extensions/jb-odd-model-profiles.ts`
 - `~/.pi/agent/extensions/model-profiles/`
 - `~/.pi/gentle-ai/model-profiles.manifest.json`
 - registered profile files such as `~/.pi/gentle-ai/models.gpt-5.6-recommended.json`

@@ -48,8 +48,8 @@ type Plan = {
 
 const configMode = 0o600;
 const extensionMode = 0o644;
-const helperFiles = ["core.ts", "transaction.ts", "catalog.ts", "editor.ts", "balancing.ts", "model-selector.ts"];
-const extensionFile = "odd-model-profiles.ts";
+const helperFiles = ["core.ts", "transaction.ts", "catalog.ts", "editor.ts", "balancing.ts", "model-selector.ts", "gentle-profiles.ts"];
+const extensionFile = "jb-odd-model-profiles.ts";
 // Migration-only: the predecessor entrypoint registered the retired command. It is moved into the
 // install backup only when its bytes equal a released package version (SHA-256 of commits 484fd80,
 // 788a582, c538441, 1b55b8a, ce683b6); any other file is treated as user-owned and stops the install.
@@ -61,6 +61,17 @@ const legacyExtensionSha256 = new Set([
   "459d5b41c5a63719b9765a9c22f1d038f153ea9f89b5186f000049d79931a75a",
   "31993351ba029c0dacb83c204e0de6480bc75b8dacafa6a10a1746b818a405a4",
 ]);
+
+// Exact committed predecessor bytes only; unknown local edits are never removed.
+const unprefixedExtensionSha256 = new Set([
+  "3482a7917582555e9864182f88d55da37c8ffded18a872ef34212b3c90c46475",
+  "63ff153d6bb3b51d27275f3334693975779abfdcb8e4c98cfc83b2ca5d36829e",
+  "90a7c848ec71e196333a8b529603dd4e28e8258f34e4908a621ab82142bf6eef",
+  "aafbd11ef7bdc45bd6650915b11064b9b57e997758166e1d1c6da913ed0405e5",
+  "be140d488b35835529b6386e2264b8e734fa87686bc05dab921aa0adbdf90de8",
+  "c30034f109e75a6c1bf6f9029a122d1927a957e3c196c860ac92be7664ef2e92",
+]);
+type RetiredExtension = { path: string; digest: string };
 
 function fail(message: string): never {
   throw new Error(message);
@@ -269,8 +280,8 @@ function sha256(content: Buffer): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
-async function inspectLegacyExtension(piHome: string): Promise<{ path: string; digest: string } | undefined> {
-  const path = join(piHome, "agent", "extensions", legacyExtensionFile);
+async function inspectLegacyExtension(piHome: string, filename: string, knownHashes: ReadonlySet<string>): Promise<RetiredExtension | undefined> {
+  const path = join(piHome, "agent", "extensions", filename);
   let info;
   try {
     info = await lstat(path);
@@ -281,7 +292,7 @@ async function inspectLegacyExtension(piHome: string): Promise<{ path: string; d
   }
   if (!info.isFile()) fail(`Legacy extension ${path} is not a regular file; review it and move it out of agent/extensions before installing.`);
   const digest = sha256(await readFile(path));
-  if (!legacyExtensionSha256.has(digest)) {
+  if (!knownHashes.has(digest)) {
     fail(`Legacy extension ${path} does not match a released package version, so ownership is uncertain; review it and move it out of agent/extensions before installing.`);
   }
   return { path, digest };
@@ -297,10 +308,10 @@ async function retireLegacyExtension(piHome: string, backupRoot: string, legacy:
 async function backupChanged(
   piHome: string,
   changed: Array<Plan & { existed: boolean }>,
-  legacy: { path: string } | undefined,
+  legacy: RetiredExtension[],
 ): Promise<string | undefined> {
   const existing = changed.filter((plan) => plan.existed);
-  if (!existing.length && !legacy) return undefined;
+  if (!existing.length && !legacy.length) return undefined;
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const backupRoot = join(piHome, "backups", `jb-odd-models-${stamp}-${process.pid}`);
   await mkdir(backupRoot, { recursive: true, mode: 0o700 });
@@ -311,10 +322,8 @@ async function backupChanged(
     await mkdir(dirname(backup), { recursive: true, mode: 0o700 });
     await copyFile(plan.path, backup);
   }
-  const legacyNote = legacy
-    ? `${relative(piHome, legacy.path)} is the retired predecessor extension, moved here by the installer; restoring it loads the retired command next to /jb:odd-models.\n`
-    : "";
-  await writeFile(join(backupRoot, "RESTORE.txt"), `Copy the saved files back to the same relative paths under PI_HOME. Files absent from this backup were created by the installer.\n${legacyNote}`, "utf8");
+  const legacyNote = legacy.map((entry) => `${relative(piHome, entry.path)} is the retired predecessor extension, moved here by the installer; do not restore it alongside ${extensionFile}, which would load duplicate or retired commands.\n`).join("");
+  await writeFile(join(backupRoot, "RESTORE.txt"), `Copy the saved files back to the same relative paths under PI_HOME. Only changed existing files and retired entrypoints are backed up; absence does not establish whether a file was newly created.\n${legacyNote}`, "utf8");
   return backupRoot;
 }
 
@@ -343,33 +352,37 @@ export async function installModelProfiles(input: InstallOptions = {}): Promise<
   const runtimePath = join(piHome, "agent", "subagents.json");
   const canonicalBase = await readOptionalJson(canonicalPath, "Active canonical profile");
   const runtimeBase = await readOptionalJson(runtimePath, "Runtime configuration");
-  const legacy = await inspectLegacyExtension(piHome);
+  const legacy: RetiredExtension[] = [];
+  for (const [filename, hashes] of [[legacyExtensionFile, legacyExtensionSha256], ["odd-model-profiles.ts", unprefixedExtensionSha256]] as const) {
+    const entry = await inspectLegacyExtension(piHome, filename, hashes);
+    if (entry) legacy.push(entry);
+  }
   const selection = selectInstallProfile(registry, canonicalBase);
   const plans = planInstall({ piHome, registry, copyAssets, profileName: selection.name, canonicalBase, runtimeBase });
   for (const plan of plans) assertInside(piHome, plan.path, "Install target");
 
   const changed = await changedPlans(plans);
-  if (!changed.length && !legacy) {
+  if (!changed.length && !legacy.length) {
     log(`jb-odd-models is already installed in ${piHome}; no files changed.`);
     return { changed: false, changedFiles: [], retiredFiles: [], activeProfile: selection.name };
   }
 
   const backupRoot = await backupChanged(piHome, changed, legacy);
-  if (legacy) await retireLegacyExtension(piHome, backupRoot!, legacy);
+  for (const entry of legacy) await retireLegacyExtension(piHome, backupRoot!, entry);
   for (const plan of changed) await atomicWrite(plan.path, plan.content, plan.mode);
 
   log(`Installed jb-odd-models into ${piHome}.`);
   if (selection.preserved) log(`Active profile kept: ${selection.name}.`);
   else if (canonicalBase) log(`Existing mappings matched no registered profile; activated default ${selection.name}. Previous files are in the backup.`);
   else log(`Active profile: ${selection.name}.`);
-  if (legacy) log(`Retired predecessor extension moved to backup: ${relative(piHome, legacy.path)}`);
+  for (const entry of legacy) log(`Retired predecessor extension moved to backup: ${relative(piHome, entry.path)}`);
   if (backupRoot) log(`Backups: ${backupRoot}`);
   log("Restart Pi, then run /jb:odd-models status.");
   return {
     changed: true,
     backupRoot,
     changedFiles: changed.map((plan) => plan.path),
-    retiredFiles: legacy ? [legacy.path] : [],
+    retiredFiles: legacy.map((entry) => entry.path),
     activeProfile: selection.name,
   };
 }

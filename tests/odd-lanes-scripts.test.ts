@@ -214,7 +214,7 @@ test("setup creates all three lane homes, copies identity files, symlinks bulky 
     assert.equal(await realpath(join(dest, "agent", "npm")), await realpath(join(source, "agent", "npm")));
     assert.equal(await exists(join(dest, "agent", "sessions")), false, "sessions must not be copied");
     assert.ok(await exists(join(dest, "agent", "extensions", "user-extension.ts")), "source extensions are copied");
-    assert.ok(await exists(join(dest, "agent", "extensions", "odd-model-profiles.ts")), "installer must add the extension");
+    assert.ok(await exists(join(dest, "agent", "extensions", "jb-odd-model-profiles.ts")), "installer must add the extension");
     assert.ok(await exists(join(dest, "gentle-ai", "models.json")), "installer must write gentle-ai/models.json");
     assert.ok(await exists(join(dest, "agent", "subagents.json")));
     const runtime = await readJson(join(dest, "agent", "subagents.json"));
@@ -263,7 +263,7 @@ test("setup writes an empty subagents.json when the source has none", async () =
   for (const dest of [gpt, grok]) {
     assert.ok(await exists(join(dest, "agent", "subagents.json")));
     assert.ok(await exists(join(dest, "gentle-ai", "models.json")));
-    assert.ok(await exists(join(dest, "agent", "extensions", "odd-model-profiles.ts")));
+    assert.ok(await exists(join(dest, "agent", "extensions", "jb-odd-model-profiles.ts")));
   }
 });
 

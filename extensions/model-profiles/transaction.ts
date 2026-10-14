@@ -149,7 +149,7 @@ async function ensureJournalDir(targets: ResolvedTargets): Promise<void> {
   await mkdir(targets.journalDir, { recursive: true, mode: 0o700 });
 }
 
-async function writeDurableFile(path: string, content: string): Promise<void> {
+export async function writeDurableFile(path: string, content: string): Promise<void> {
   const temp = join(dirname(path), `.${basename(path)}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`);
   let handle;
   try {

@@ -33,7 +33,7 @@ The installer copies the command and profile data into Pi home:
 
 | Target | Purpose |
 |---|---|
-| `$PI_HOME/agent/extensions/odd-model-profiles.ts` | Slash command extension |
+| `$PI_HOME/agent/extensions/jb-odd-model-profiles.ts` | Slash command extension |
 | `$PI_HOME/agent/extensions/model-profiles/` | Helper modules, including catalog validation and the profile editor |
 | `$PI_HOME/gentle-ai/model-profiles.manifest.json` | Profile manifest |
 | `$PI_HOME/gentle-ai/model-catalog.json` | Optional generated catalog copied only when `config/model-catalog.json` exists in the package |
@@ -46,7 +46,7 @@ Unrelated JSON keys and unrelated `model_profiles` entries are preserved. Reinst
 ## Two distinct migrations
 
 - **Historical SDD retirement:** upgrading from `/jb-sdd-odd-models` moves a recognized released `sdd-model-profiles.ts` into the backup and removes exactly its 13 retired `sdd-*` routes. Unknown extension bytes stop installation for ownership review.
-- **Package 2.0.0 namespace change:** `/jb-odd-models` becomes `/jb:odd-models` by replacing the same `odd-model-profiles.ts` and its helpers. Update saved invocations and reload/restart Pi. Package name `jb-odd-models`, installed paths, and backup prefix are unchanged.
+- **Package 2.0.0 namespace change:** `/jb-odd-models` becomes `/jb:odd-models` originally by replacing the same `odd-model-profiles.ts` and its helpers. That namespace-only change preserved package name, paths, and backup prefix. The later [prefixed filename migration](HOW_TO_INSTALL.md#prefixed-extension-filename) installs `jb-odd-model-profiles.ts` and backs up recognized predecessors. Update saved invocations and reload/restart Pi.
 
 Neither old command remains an alias. Manifest `schemaVersion: 2` describes ODD-only configuration coverage, not package version 2.0.0. See [migration and preservation details](HOW_TO_INSTALL.md#upgrade-from-the-previous-command).
 

@@ -6,7 +6,7 @@ This package is a small configuration-and-extension layer. It does not bundle Pi
 
 | Component | Responsibility | Does not own |
 |---|---|---|
-| `extensions/odd-model-profiles.ts` | Registers `/jb:odd-models`, validates ODD profiles through shared helpers, reports status/list/preview/doctor, switches profiles, undoes/recover transactions, and requests reload after changed mutations. | Provider authentication, model execution, model catalog generation, or agent definitions. |
+| `extensions/jb-odd-model-profiles.ts` | Registers `/jb:odd-models`, validates ODD profiles through shared helpers, reports status/list/preview/doctor, switches profiles, undoes/recover transactions, and requests reload after changed mutations. | Provider authentication, model execution, model catalog generation, or agent definitions. |
 | `extensions/model-profiles/core.ts` | Owns manifest/profile validation, opposite-provider judge selection, and canonical/runtime derivation. | Pi extension registration. |
 | `extensions/model-profiles/editor.ts` | Views saved profiles; edits/creates named definitions from all auth-available invoking-registry models, with supported thinking choices and confirmed saves; runs the Balance dialog (consent, preview, named save). | Activation, provider calls outside Balance, or exported-catalog fallback. |
 | `extensions/model-profiles/balancing.ts` | Builds the allowlisted Balance request, gates the current model's output cap, runs one bounded/cancellable consultation, and validates the untrusted reply. | Saving, activation, retries, fallback models, or cost/token accounting. |
@@ -22,7 +22,7 @@ This package is a small configuration-and-extension layer. It does not bundle Pi
 
 ```text
 Gentle Pi extension host
-  └─ loads odd-model-profiles.ts
+  └─ loads jb-odd-model-profiles.ts
        ├─ reads/writes $PI_HOME/gentle-ai model profiles
        ├─ reads/writes $PI_HOME/agent/subagents.json
        ├─ inspects $PI_HOME/gentle-ai/.model-profiles-transactions

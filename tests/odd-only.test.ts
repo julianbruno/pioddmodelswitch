@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { deriveRuntimeConfigForSelection, validateManifest, validateProfileSet } from "../extensions/model-profiles/core.ts";
-import oddModelProfiles from "../extensions/odd-model-profiles.ts";
+import oddModelProfiles from "../extensions/jb-odd-model-profiles.ts";
 
 // Exact retired routes, not a prefix match: custom SDD-like routes remain user-owned.
 const retired = ["sdd-init", "sdd-explore", "sdd-research", "sdd-proposal", "sdd-spec", "sdd-design", "sdd-tasks", "sdd-onboard", "sdd-archive", "sdd-apply", "sdd-verify", "sdd-status", "sdd-sync"];

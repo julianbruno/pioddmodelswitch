@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import oddModelProfiles from "../extensions/odd-model-profiles.ts";
+import oddModelProfiles from "../extensions/jb-odd-model-profiles.ts";
 
 type RegisteredCommand = {
   description: string;

@@ -90,7 +90,7 @@ prepare_lane() {
   # Extensions: seed the dest tree from the source when the package extension is not
   # present yet. Existing dest extensions are left in place; the installer refreshes
   # only the jb-odd-models files and never deletes extra dest files.
-  if [ -d "$src_agent/extensions" ] && [ ! -e "$dest_agent/extensions/odd-model-profiles.ts" ]; then
+  if [ -d "$src_agent/extensions" ] && [ ! -e "$dest_agent/extensions/jb-odd-model-profiles.ts" ]; then
     mkdir -p "$dest_agent/extensions"
     cp -a "$src_agent/extensions/." "$dest_agent/extensions/"
   fi

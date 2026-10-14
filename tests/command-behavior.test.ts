@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import test from "node:test";
 
-import oddModelProfiles, { balanceProgress } from "../extensions/odd-model-profiles.ts";
+import oddModelProfiles, { balanceProgress } from "../extensions/jb-odd-model-profiles.ts";
 import { RETIRED_MANAGED_AGENTS } from "../extensions/model-profiles/core.ts";
 import { inspectModelProfileTransactions } from "../extensions/model-profiles/transaction.ts";
 
@@ -894,4 +894,98 @@ test("edit subcommand opens the profile editor without applying the active profi
   assert.match(harness.notifications.at(-1)?.message ?? "", /Profile: openai/);
   assert.deepEqual(await snapshotTree(harness.root), before);
   assert.deepEqual((await readJson(harness.canonicalPath)).orchestrator, { model: "openai-codex/orchestrator", thinking: "high" });
+});
+
+const gentleProfilesKind = "gentle-pi.agent_model_profiles";
+const gentleBindingsKey = Symbol.for("gentle-pi:session-profile-bindings");
+
+function gentleBindings(): Map<string, { name: string; modelProfiles: Record<string, unknown> }> {
+  const holder = globalThis as any;
+  holder[gentleBindingsKey] ??= new Map();
+  return holder[gentleBindingsKey];
+}
+
+async function seedGentleProfiles(h: Awaited<ReturnType<typeof createHarness>>, value: unknown = {
+  kind: gentleProfilesKind,
+  version: 1,
+  profiles: { current: profile("xai", "high"), keep: profile("keep", "low") },
+  active: "current",
+}): Promise<string> {
+  const path = join(h.gentleDir, "profiles.json");
+  await writeJson(path, value);
+  return path;
+}
+
+test("switch makes the selected profile the active Gentle profile and keeps the other saved profiles", async () => {
+  const h = await createHarness();
+  const path = await seedGentleProfiles(h);
+  await h.command.handler("local", h.ctx);
+  const store = await readJson(path);
+  assert.equal(store.kind, gentleProfilesKind);
+  assert.equal(store.version, 1);
+  assert.equal(store.active, "local");
+  assert.deepEqual(store.profiles.local, selectedProfile("local", "medium", "local", "medium"));
+  assert.deepEqual(store.profiles.current, profile("xai", "high"));
+  assert.deepEqual(store.profiles.keep, profile("keep", "low"));
+  assert.ok(h.notifications.at(-1)!.message.includes(path));
+});
+
+test("file no-op switch still repairs a stale active Gentle profile", async () => {
+  const h = await createHarness();
+  const path = await seedGentleProfiles(h);
+  const canonicalBefore = await readFile(h.canonicalPath, "utf8");
+  await h.command.handler("openai", h.ctx);
+  assert.equal(await readFile(h.canonicalPath, "utf8"), canonicalBefore);
+  const store = await readJson(path);
+  assert.equal(store.active, "openai");
+  assert.deepEqual(store.profiles.openai, selectedProfile("openai-codex", "high", "xai", "xhigh"));
+  assert.equal(h.reloadCount(), 0);
+});
+
+test("switch never creates a missing Gentle profiles.json", async () => {
+  const h = await createHarness();
+  await h.command.handler("local", h.ctx);
+  await assert.rejects(stat(join(h.gentleDir, "profiles.json")), { code: "ENOENT" });
+});
+
+test("aligned Gentle profile store is left byte- and mtime-identical", async () => {
+  const h = await createHarness();
+  await seedGentleProfiles(h);
+  await h.command.handler("local", h.ctx);
+  const before = await snapshotTree(h.root);
+  await h.command.handler("local", h.ctx);
+  assert.deepEqual(await snapshotTree(h.root), before);
+});
+
+test("unrecognized Gentle profiles.json aborts the switch without writing any file", async () => {
+  const h = await createHarness();
+  await seedGentleProfiles(h, { kind: "something-else", profiles: {} });
+  const before = await snapshotTree(h.root);
+  await h.command.handler("local", h.ctx);
+  assert.equal(h.notifications.at(-1)!.level, "error");
+  assert.match(h.notifications.at(-1)!.message, /profiles\.json is not a gentle-pi\.agent_model_profiles v1 store; refusing to overwrite it/);
+  assert.deepEqual(await snapshotTree(h.root), before);
+  assert.deepEqual(h.session(), { model: { provider: "openai-codex", id: "orchestrator" }, thinking: "high" });
+  assert.equal(h.reloadCount(), 0);
+});
+
+test("switch binds the invoking session to the selected Gentle profile without the orchestrator", async () => {
+  const h = await createHarness();
+  const sessionId = `session-${Math.random().toString(16).slice(2)}`;
+  (h.ctx as any).sessionManager = { getSessionId: () => sessionId };
+  await h.command.handler("local", h.ctx);
+  const binding = gentleBindings().get(sessionId);
+  const { orchestrator: _orchestrator, ...roles } = selectedProfile("local", "medium", "local", "medium");
+  assert.deepEqual(binding, { name: "local", modelProfiles: roles });
+  gentleBindings().delete(sessionId);
+});
+
+test("undo moves the active Gentle profile back to the restored routing", async () => {
+  const h = await createHarness();
+  const path = await seedGentleProfiles(h);
+  await h.command.handler("local", h.ctx);
+  await h.command.handler("undo", h.ctx);
+  const store = await readJson(path);
+  assert.equal(store.active, "openai");
+  assert.deepEqual(store.profiles.openai, selectedProfile("openai-codex", "high", "xai", "xhigh"));
 });

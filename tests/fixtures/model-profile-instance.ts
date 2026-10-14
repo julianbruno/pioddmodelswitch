@@ -223,7 +223,7 @@ export async function startInstance(name: string, piHome: string, options: Lifec
 }
 
 async function runChild(piHome: string): Promise<void> {
-  const { default: oddModelProfiles } = await import(new URL("../../extensions/odd-model-profiles.ts", import.meta.url).href);
+  const { default: oddModelProfiles } = await import(new URL("../../extensions/jb-odd-model-profiles.ts", import.meta.url).href);
   const commands = new Map<string, { handler(args: string, ctx: unknown): Promise<void> | void }>();
   let current: Session["model"] = { provider: "openai-codex", id: "orchestrator" };
   let thinking = "high";
