@@ -4,7 +4,7 @@ This portable package installs the `/jb:odd-models` Pi command, helper modules, 
 
 The installer keeps the currently active registered profile (or uses the default profile on a fresh install), preserves unrelated configuration, and backs up every existing file it changes. Upgrading from the previous `/jb-sdd-odd-models` package is covered in [Installation and recovery](HOW_TO_INSTALL.md#upgrade-from-the-previous-command).
 
-**Start here: [Complete user guide](USAGE.md)** — installation, all commands, step-by-step role editing and cloning, Balance consent, recovery, three routing lanes, and troubleshooting.
+**Start here: [Complete user guide](USAGE.md)** — installation, all commands, step-by-step editing/cloning, Archive/Restore, Balance consent, recovery, shared-home sessions, and optional routing lanes, and troubleshooting.
 
 ## Breaking change in 2.0.0
 
@@ -38,12 +38,26 @@ For the installer, `PI_HOME` selects the target only. For a live launch, keep al
 
 Pi instances sharing one home can keep distinct ODD profiles: select the desired profile inside each instance to bind its own Gentle routing snapshot. Shared saved defaults affect new/resumed sessions, not existing bindings. Optional lane scripts also isolate persisted defaults. See [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes).
 
+## Shared-home profiles and archive
+
+Open separate Pi instances with the same home, then select inside each one:
+
+```text
+/jb:odd-models grok-4-7            # Grok instance
+/jb:odd-models openai6-1-gentle    # OpenAI instance
+/jb:odd-models claude-opus-5.5     # Claude instance
+```
+
+Each instance keeps its own Gentle binding across `/reload`. Shared defaults affect new/resumed sessions; existing sessions and running children are not switched by another instance.
+
+Use `/jb:odd-models edit` → **Archive** for an inactive profile: it becomes `.json.back` and disappears from JB selection. **Restore** makes it selectable again without activation. Active profiles are blocked. See [the complete workflow](USAGE.md#archive-or-restore-a-profile).
+
 ## Documentation
 
 - [Quick installation](INSTALLATION.md)
 - [Installation and recovery](HOW_TO_INSTALL.md) — includes [two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes) with separate Pi homes.
 - [Programmatic testing](TESTING.md)
-- [Complete user guide](USAGE.md) — `/jb:odd-models edit` views, edits, or creates named profiles from all auth-available models in the invoking Pi registry; no exported catalog is required. Saving does not activate the profile. Optional **Balance** asks the current Pi model once, after consent and with possible provider cost, for an advisory new profile; some current models, including Codex, are refused. See [Balance](USAGE.md#balance-a-profile-with-the-current-model).
+- [Complete user guide](USAGE.md) — `/jb:odd-models edit` views, edits, creates, archives, or restores named profiles from all auth-available models in the invoking Pi registry; no exported catalog is required. Saving does not activate the profile. Optional **Balance** asks the current Pi model once, after consent and with possible provider cost, for an advisory new profile; some current models, including Codex, are refused. See [Balance](USAGE.md#balance-a-profile-with-the-current-model).
 - [How switching works](MODEL_SWITCHING.md) — direct selection also aligns the current Pi session's orchestrator model and thinking (1.4.0).
 - [Architecture and limitations](ARCHITECTURE.md)
 - [Provenance caveat](NOTICE.md)

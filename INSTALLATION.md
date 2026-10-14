@@ -1,6 +1,6 @@
 # Install `/jb:odd-models`
 
-This guide shows the shortest safe path to install the model-profile switch plugin into Pi. Continue with the [complete user guide](USAGE.md) for inspection, activation, editing, Balance, and routing lanes.
+This guide shows the shortest safe path to install the model-profile switch plugin into Pi. Continue with the [complete user guide](USAGE.md) for inspection, activation, editing, Archive/Restore, Balance, shared-home sessions, and optional routing lanes.
 
 ## Quick install
 
@@ -11,7 +11,7 @@ cd /path/to/pissdmodelswitch
 ./install/install.sh
 ```
 
-Then restart Pi and verify the command is loaded:
+Then run `/reload` in each open instance (or restart to resolve defaults anew) and verify the command is loaded:
 
 ```text
 /jb:odd-models status
@@ -43,6 +43,8 @@ The installer copies the command and profile data into Pi home:
 
 Unrelated JSON keys and unrelated `model_profiles` entries are preserved. Reinstall preserves canonical mappings matching the package registry; unmatched custom mappings fall back to its default. Installed custom registrations/edits are not automatically merged, so preserve copies before updating.
 
+For code-only updates that must preserve unmatched active routing or archive state, see [the manual asset-only refresh boundary](HOW_TO_INSTALL.md#code-only-updates-with-custom-active-routing) before using the full installer.
+
 ## Two distinct migrations
 
 - **Historical SDD retirement:** upgrading from `/jb-sdd-odd-models` moves a recognized released `sdd-model-profiles.ts` into the backup and removes exactly its 13 retired `sdd-*` routes. Unknown extension bytes stop installation for ownership review.
@@ -73,7 +75,7 @@ $PI_HOME/backups/jb-odd-models-<timestamp>-<pid>/
 
 Re-running the installer with identical generated files is a no-op and does not create a new backup.
 
-## Verify after restart
+## Verify after reload or restart
 
 Run:
 
@@ -88,7 +90,9 @@ Expected result:
 - `status` shows `openaigentle` by default, another registered profile, or intentionally `custom`.
 - `doctor` reports healthy managed mappings or actionable diagnostics.
 - `/jb:odd-models edit` can view saved profiles without a model registry or catalog. Edit/Create use all auth-available models in the invoking Pi registry, not the session-scoped subset; no export is required. A missing, empty, invalid, or failing registry blocks Edit/Create without writes or a file-catalog fallback.
-- Saving a named profile does not activate it. Select it separately with `/jb:odd-models <profile>`.
+- Saving or restoring a named profile does not activate it. Select it separately with `/jb:odd-models <profile>`.
+- Archive/Restore work without a live catalog. Archive blocks the active profile, retains `.json.back`, and removes it from JB selection; Restore reverses that change.
+- Separate Grok/OpenAI/Claude instances can share a home through Gentle session bindings; lane homes are optional isolation of persisted defaults.
 
 `npm run export:model-catalog` remains optional for inspection/headless tooling. Reinstall to copy a generated `config/model-catalog.json` into `$PI_HOME/gentle-ai/model-catalog.json`, or copy it there yourself; interactive editing does not consult it. Registry availability is local auth/configuration evidence, not proof of provider reachability or account entitlement.
 

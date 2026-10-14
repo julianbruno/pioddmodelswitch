@@ -7,11 +7,12 @@ This package is a small configuration-and-extension layer. It does not bundle Pi
 | Component | Responsibility | Does not own |
 |---|---|---|
 | `extensions/jb-odd-model-profiles.ts` | Registers `/jb:odd-models`, validates ODD profiles through shared helpers, reports status/list/preview/doctor, switches profiles, undoes/recover transactions, and requests reload after changed mutations. | Provider authentication, model execution, model catalog generation, or agent definitions. |
-| `extensions/model-profiles/core.ts` | Owns manifest/profile validation, opposite-provider judge selection, and canonical/runtime derivation. | Pi extension registration. |
-| `extensions/model-profiles/editor.ts` | Views saved profiles; edits/creates named definitions from all auth-available invoking-registry models, with supported thinking choices and confirmed saves; runs the Balance dialog (consent, preview, named save). | Activation, provider calls outside Balance, or exported-catalog fallback. |
+| `extensions/model-profiles/core.ts` | Owns manifest/profile validation, selectable versus archived registrations, opposite-provider judge selection, and canonical/runtime derivation. | Pi extension registration. |
+| `extensions/model-profiles/gentle-profiles.ts` | Normalizes saved/runtime routes, preserves custom assignments, aligns an existing Gentle store, and binds a session-ID scoped routing snapshot using the installed Gentle Symbol contract. | Provider execution, other sessions' live models, or durable cross-process bindings. |
+| `extensions/model-profiles/editor.ts` | Views saved profiles; edits/creates named definitions from all auth-available invoking-registry models, with supported thinking choices and confirmed saves; runs Balance (consent, preview, named save) and reversible Archive/Restore guarded against active profiles. | Activation, provider calls outside Balance, or exported-catalog fallback. |
 | `extensions/model-profiles/balancing.ts` | Builds the allowlisted Balance request, gates the current model's output cap, runs one bounded/cancellable consultation, and validates the untrusted reply. | Saving, activation, retries, fallback models, or cost/token accounting. |
 | `extensions/model-profiles/catalog.ts` and `scripts/export-model-catalog.ts` | Validate/export optional catalog snapshots for inspection and headless tooling. | Interactive editor choices or proof of remote model access. |
-| `extensions/model-profiles/transaction.ts` | Owns read/write transaction locking, active journal, history, guarded undo, recovery, and read-only inspection diagnostics. | Choosing model profiles or repairing malformed state automatically. |
+| `extensions/model-profiles/transaction.ts` | Owns switch/undo/recovery locking, active journal, history, guarded undo/recovery, read-only diagnostics, and the shared lifecycle lock for Archive/Restore. | Choosing model profiles or repairing malformed state automatically. |
 | `config/model-profiles.manifest.json` | Defines schema version, managed agent groups, opposite-provider judge routing, default profile, reserved command names, and registered profile files. | Runtime behavior outside declared mappings. |
 | `config/models.<profile>.json` | Defines each canonical model profile; version 1.3 materializes every role-based profile from `config/named-profiles.json`, legacy aliases, and standalone `claude-opus-5.5`. At install time, active files follow the currently active registered profile, or the manifest default when none matches. | Runtime behavior or user overrides. |
 | `install/install.sh` and `install/model-profiles-install.ts` | Enforce the Node strip-types minimum, validate assets, back up changed targets, install extension/helper layout, retire the released predecessor extension into the backup, and perform a merge-friendly runtime update that removes retired routes. | Installing Gentle Pi, credentials, or providers. |
@@ -31,8 +32,9 @@ Gentle Pi extension host
        └─ requests Pi reload after changed mutations
 
 Gentle Pi native agent runtime
-  └─ consumes subagents.json.model_profiles
-       └─ dispatches the selected model/effort for each managed agent
+  └─ resolves explicit session binding → inherited startup snapshot → effective defaults
+       └─ replaces model_profiles with that complete snapshot when present
+            └─ dispatches each captured model/thinking assignment
 
 Pi registry/auth configuration
   └─ supplies local model/capability evidence, not proof of remote execution
@@ -58,7 +60,15 @@ See [Balance details](USAGE.md#balance-a-profile-with-the-current-model).
 
 The installer writes only beneath `PI_HOME` at installation time. It validates the versioned manifest and every registered profile before writing, derives active `models.json` and merged `subagents.json` entries from the currently active registered profile (or the default profile when no registered profile matches) using the same opposite-provider judge logic as the command, preserves unrelated JSON keys, and creates timestamped backups for existing targets whose content changes. It also installs the helper modules (`core.ts`, `transaction.ts`, `catalog.ts`, `editor.ts`, and `balancing.ts`) under `extensions/model-profiles/` next to the command extension, which is required for the installed command to load.
 
-The packaged extension resolves Pi home from `PI_HOME` when set, otherwise retaining `~/.pi` behavior. A custom value must be exported into the Pi process as well as the installer process. Pi and Gentle resolve their own homes from `PI_CODING_AGENT_DIR`, `GENTLE_PI_AGENT_HOME`, and `GENTLE_PI_CONFIG_HOME`, not from `PI_HOME`; the lane launchers align all four (see [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes)). Profile names are path-safe command arguments: lowercase alphanumeric segments separated by `-` or `.`, with no spaces or path separators.
+Explicit injected paths and `PI_HOME` retain the plugin sandbox layout. Without a custom home, the extension honors `GENTLE_PI_CONFIG_HOME`, and `GENTLE_PI_AGENT_HOME` before `PI_CODING_AGENT_DIR`; empty values fall through to standard `~/.pi` paths. A custom value must be exported into the Pi process as well as the installer process. Pi and Gentle resolve their own homes from `PI_CODING_AGENT_DIR`, `GENTLE_PI_AGENT_HOME`, and `GENTLE_PI_CONFIG_HOME`, not from `PI_HOME`; the lane launchers align all four (see [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes)). Profile names are path-safe command arguments: lowercase alphanumeric segments separated by `-` or `.`, with no spaces or path separators.
+
+## Session and archive boundaries
+
+A named switch captures its applied managed/runtime routing under the transaction lock. Session binding uses that snapshot, never a later read of another instance's shared selection. It overlays managed routes on the invoking explicit/inherited custom routes, or effective runtime/project custom routes when no Gentle snapshot exists. Saved Gentle routes accept object entries or string shorthand; saved entries prefer valid `thinking`, while runtime entries prefer `effort`.
+
+Bindings and inherited freezes survive `/reload` in-process. They are not persisted across process restart/resume; new sessions resolve defaults again. Shared `profiles.json` alignment is optimistic and separate from the canonical/runtime transaction: a conflicting update is refused and reported, without discarding the caller's already established binding.
+
+Archive retains original named bytes as `.json.back`, marks the registration disabled, and removes it from all selectable JB lists. Existing judge dependencies can still read archived definitions. Archive/Restore share the mutation lock, reject destination collisions and stale registry bytes, and leave active mappings/sessions untouched. Independently saved Gentle profiles are not deleted. See [archive behavior and interruption limits](USAGE.md#archive-or-restore-a-profile).
 
 ## Version boundary
 

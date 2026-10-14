@@ -11,7 +11,7 @@ cd ~/miscodigos/pissdmodelswitch
 ./install/install.sh
 ```
 
-Then restart Pi and run:
+Then run `/reload` in each open instance (or restart to resolve defaults again), and run:
 
 ```text
 /jb:odd-models status
@@ -40,6 +40,8 @@ It writes or updates:
 - managed `model_profiles` entries in `~/.pi/agent/subagents.json`
 
 Unrelated runtime keys and unrelated `model_profiles` entries are preserved.
+
+For extension/helper-only fixes, if you need to keep unmatched custom active routing, use the [code-only refresh boundary](HOW_TO_INSTALL.md#code-only-updates-with-custom-active-routing) instead of resetting the package registry. Existing Gentle bindings survive `/reload`; separate instances sharing a home can keep different profiles. Use `/jb:odd-models edit` → Archive/Restore to hide and recover inactive profiles without activation.
 
 ## Custom `PI_HOME`
 

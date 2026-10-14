@@ -67,7 +67,7 @@ The intended new installed entrypoint `agent/extensions/jb-odd-model-profiles.ts
 
 **Known unresolved upgrade defect:** the pending setup filename gate can recopy the entire source extension tree into an existing lane with the old entrypoint, overwriting lane-local extensions before the installer backs them up. Do not treat rerunning setup as a safe upgrade until that defect is fixed.
 
-The previously reviewed same-home Gentle alignment races and semantic no-op rewrite also remain unfixed. These are separate from removal. The uninstaller does not correct routing or update package assets.
+The command now captures each named selection under the transaction lock and preserves same-home session bindings and custom Gentle routes. Optional lane homes isolate persisted defaults, not a requirement for separate live Grok/OpenAI/Claude instances. Saved-store alignment remains optimistic and reports conflicts; the uninstaller does not change routing or refresh package assets. See [current scope](USAGE.md#scope-shared-files-caller-only-live-changes).
 
 ## 4. Preview or archive complete lane homes
 

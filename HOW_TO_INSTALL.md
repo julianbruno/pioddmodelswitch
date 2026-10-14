@@ -29,6 +29,12 @@ The installer writes:
 
 Existing unrelated canonical keys, unrelated top-level runtime keys, and unrelated `model_profiles` entries in `subagents.json` are preserved. Re-running the installer is safe: identical files are left unchanged and no backup is created. With the packaged manifest, the default profile is `openaigentle`, using GPT-6 Sol/Luna. Unpaired profiles such as `openaigentle` retain their own judge mappings; configured pairs use opposite-provider judges unless `oppositeProviderJudges` is disabled or has no agents.
 
+### Code-only updates with custom active routing
+
+The standard installer also replaces the packaged registry and derives active mappings. If current `models.json` matches no packaged profile, it selects the package default; backups do not prevent that selection change. For a code-only update that must keep custom active routing or archive state, back up and refresh only `agent/extensions/jb-odd-model-profiles.ts` and the package-owned helpers in `agent/extensions/model-profiles/`. Do not replace the manifest, named definitions, `models.json`, `subagents.json`, or Gentle `profiles.json`. Do not overwrite user-owned helper files. Check for an active transaction/lock before copying, and verify installed asset bytes plus unchanged configuration afterward. This is a manual asset refresh, not an installer flag.
+
+Run `/reload` in each existing instance afterward; it retains Gentle's in-process explicit/inherited snapshots. A restart/resume resolves current defaults again.
+
 ### Custom Pi home
 
 For installation, `PI_HOME` selects the target only. For a live launch, align all four plugin, Pi, and Gentle home variables:
@@ -118,7 +124,7 @@ If an active transaction journal or lock exists, the installer fails closed befo
 
 ## Verify
 
-1. Restart Pi so it loads the installed extension.
+1. Run `/reload` in each open Pi instance to load the extension while retaining in-process session bindings, or restart if you want to resolve defaults again.
 2. Run `/jb:odd-models status`.
 3. Run `/jb:odd-models doctor`.
 4. Confirm that all managed mappings are listed and the active profile is `openaigentle`, another registered profile, or intentionally `custom`.
@@ -134,7 +140,7 @@ If Pi does not recognize the command, verify that Gentle Pi loads TypeScript ext
 
 ## Add or install a third profile
 
-For installed profiles, prefer `/jb:odd-models edit`: Create clones a registered template and offers all auth-available models from the invoking Pi registry, without requiring an exported catalog. Save updates the named definition and registers it, but does not activate it; select `/jb:odd-models <profile>` separately. View needs no model availability. Missing, empty, invalid, or failing registry evidence blocks Edit/Create without writes or a stale-catalog fallback. Availability does not prove provider reachability or account entitlement. See [editor behavior and optional catalog export](USAGE.md#edit-or-create-a-named-profile).
+For installed profiles, prefer `/jb:odd-models edit`: Create clones a registered template and offers all auth-available models from the invoking Pi registry, without requiring an exported catalog. Save updates the named definition and registers it, but does not activate it; select `/jb:odd-models <profile>` separately. View/Archive/Restore need no model availability; Archive blocks active profiles and Restore never activates a profile. Missing, empty, invalid, or failing registry evidence blocks Edit/Create without writes or a stale-catalog fallback. Availability does not prove provider reachability or account entitlement. See [editor behavior and optional catalog export](USAGE.md#edit-or-create-a-named-profile).
 
 For packaged profiles, the manifest is the source of truth. To add a profile such as `local`, add it to `model-profiles.manifest.json`, create `models.local.json`, and include exactly the same active managed agents as the existing profiles, including configured judge/reviewer agents. Then reinstall so the new manifest/profile file is copied into Pi home. A profile without an `oppositeProviderJudges.profilePairs` entry uses its own models for judges.
 
