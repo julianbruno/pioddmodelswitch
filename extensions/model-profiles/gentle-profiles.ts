@@ -29,14 +29,18 @@ export type GentleRouting = Record<string, { model?: string; thinking?: string }
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
 /** Normalize both canonical and materialized routes using Gentle's accepted fields. */
-export function normalizeGentleRouting(value: unknown): GentleRouting {
+export function normalizeGentleRouting(value: unknown, runtime = false): GentleRouting {
   if (!isJsonObject(value)) return {};
   return Object.fromEntries(Object.entries(value).flatMap(([agent, entry]) => {
-    if (!isJsonObject(entry) || (RETIRED_MANAGED_AGENTS as readonly string[]).includes(agent)) return [];
-    const model = typeof entry.model === "string" && entry.model.trim() ? entry.model.trim() : undefined;
-    const level = entry.effort ?? entry.thinking;
+    if ((RETIRED_MANAGED_AGENTS as readonly string[]).includes(agent)) return [];
+    if (typeof entry === "string") return /^[A-Za-z0-9._~:@/+%-]+$/.test(entry.trim()) ? [[agent, { model: entry.trim() }]] : [];
+    if (!isJsonObject(entry)) return [];
+    const model = typeof entry.model === "string" && /^[A-Za-z0-9._~:@/+%-]+$/.test(entry.model.trim()) ? entry.model.trim() : undefined;
+    // Saved profiles prefer valid thinking; materialized subagents prefer effort.
+    const level = runtime ? entry.effort ?? entry.thinking
+      : typeof entry.thinking === "string" && THINKING_LEVELS.has(entry.thinking) ? entry.thinking : entry.effort;
     const thinking = typeof level === "string" && THINKING_LEVELS.has(level) ? level : undefined;
-    return model || thinking ? [[agent, { ...(model ? { model } : {}), ...(thinking ? { thinking } : {}) }]] : [];
+    return model || thinking || Object.keys(entry).length === 0 ? [[agent, { ...(model ? { model } : {}), ...(thinking ? { thinking } : {}) }]] : [];
   }));
 }
 

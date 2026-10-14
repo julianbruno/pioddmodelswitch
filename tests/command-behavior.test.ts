@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { spawnSync } from "node:child_process";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -1254,5 +1256,72 @@ test("explicit options and PI_HOME preserve sandbox precedence over Gentle overr
     }
   } finally {
     for (const key of keys) if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+  }
+});
+
+test("Gentle saved shorthand custom assignments survive a same-name switch", async () => {
+  const h = await createHarness();
+  const path = await seedGentleProfiles(h, { kind: gentleProfilesKind, version: 1,
+    profiles: { local: { custom: "xai/grok-4.7", canonicalAlias: { model: "xai/model", thinking: "high", effort: "low" }, empty: {} } } });
+  await h.command.handler("local", h.ctx);
+  assert.equal(h.notifications.at(-1)?.level, "info");
+  assert.deepEqual((await readJson(path)).profiles.local.custom, { model: "xai/grok-4.7" });
+  assert.deepEqual((await readJson(path)).profiles.local.canonicalAlias, { model: "xai/model", thinking: "high" });
+  assert.deepEqual((await readJson(path)).profiles.local.empty, {});
+});
+
+test("interleaved shared-home switches retain the routing each session actually applied", async () => {
+  const h = await createHarness();
+  const storePath = await seedGentleProfiles(h);
+  const manifestPath = join(h.gentleDir, "model-profiles.manifest.json");
+  const manifest = await readJson(manifestPath);
+  manifest.profiles.push({ name: "claude", modelsFile: "models.claude.json" });
+  await writeJson(manifestPath, manifest);
+  await writeJson(join(h.gentleDir, "models.claude.json"), profile("anthropic", "high"));
+  const sessions = ["grok", "claude"].map(name => {
+    let model = { provider: "initial", id: "parent" };
+    let thinking = "low";
+    const id = `${h.root}-race-${name}`;
+    let command!: RegisteredCommand;
+    oddModelProfiles({
+      registerCommand: (_name: string, value: RegisteredCommand) => { command = value; },
+      setModel: async (next: typeof model) => { model = next; return true; },
+      getThinkingLevel: () => thinking,
+      setThinkingLevel: (next: string) => { thinking = next; },
+    } as any, { piHome: h.root });
+    return { name, id, command, current: () => model,
+      ctx: { ...h.ctx, get model() { return model; }, sessionManager: { getSessionId: () => id } } };
+  });
+  let entered!: () => void;
+  let release!: () => void;
+  const ready = new Promise<void>(resolve => { entered = resolve; });
+  const resume = new Promise<void>(resolve => { release = resolve; });
+  const original = fs.promises.unlink;
+  let held = false;
+  // Pause the public command at the filesystem lock-release boundary, after
+  // A committed Grok and before A performs post-transaction Gentle alignment.
+  fs.promises.unlink = async path => {
+    await original(path);
+    if (String(path) === join(h.journalDir, "lock.json") && !held) {
+      held = true; entered(); await resume;
+    }
+  };
+  syncBuiltinESMExports();
+  let first: Promise<void | undefined> | undefined;
+  try {
+    first = Promise.resolve(sessions[0].command.handler("grok", sessions[0].ctx));
+    await ready;
+    await sessions[1].command.handler("claude", sessions[1].ctx);
+    release(); await first;
+    assert.deepEqual(sessions.map(session => session.current().provider), ["xai", "anthropic"]);
+    assert.deepEqual(sessions.map(session => gentleBindings().get(session.id)?.name), ["grok", "claude"]);
+    assert.deepEqual((gentleBindings().get(sessions[0].id)?.modelProfiles as any)["gentle-ai-worker"], { model: "xai/gentle-ai-worker", thinking: "xhigh" });
+    assert.deepEqual((gentleBindings().get(sessions[1].id)?.modelProfiles as any)["gentle-ai-worker"], { model: "anthropic/gentle-ai-worker", thinking: "high" });
+    assert.equal((await readJson(h.canonicalPath)).orchestrator.model, "anthropic/orchestrator");
+    assert.equal((await readJson(storePath)).active, "claude");
+  } finally {
+    release(); await first;
+    fs.promises.unlink = original; syncBuiltinESMExports();
+    sessions.forEach(session => gentleBindings().delete(session.id));
   }
 });

@@ -68,6 +68,12 @@ type ProfileRegistry = {
   profiles: Record<string, ValidatedModelProfile>;
 };
 
+type AppliedProfileSnapshot = {
+  name: string;
+  routing: GentleRouting;
+  runtimeRouting: GentleRouting;
+};
+
 type ProfileRuntimeState = {
   canonical: JsonObject;
   runtime: JsonObject;
@@ -575,7 +581,7 @@ function assertNoTransactionHazardForNoop(inspection: Awaited<ReturnType<typeof 
   if (diagnostic) throw new Error(`Model profile transaction ${diagnostic.area} is ambiguous: ${diagnostic.message}`);
 }
 
-async function switchProfile(paths: ResolvedPaths, name: string): Promise<"changed" | "noop"> {
+async function switchProfile(paths: ResolvedPaths, name: string): Promise<AppliedProfileSnapshot & { result: "changed" | "noop" }> {
   const registry = await loadRegistry(paths);
   const profile = selectedProfile(registry, name);
   if (!profile) throw new Error(`Unknown profile: ${name}\n${usage(registry.manifest)}`);
@@ -583,15 +589,16 @@ async function switchProfile(paths: ResolvedPaths, name: string): Promise<"chang
   const targets = transactionTargets(paths);
   const preflightState = await readActiveState(paths, registry.manifest, true);
   const selectedCanonicalProfile = deriveCanonicalProfileForSelection(name, registry.profiles, registry.manifest);
+  let snapshot: AppliedProfileSnapshot = { name, routing: selectedCanonicalProfile, runtimeRouting: normalizeGentleRouting(preflightState.runtime.model_profiles, true) };
   if (profileMatchesState(preflightState, selectedCanonicalProfile, registry.manifest) && !hasRetiredState(preflightState)) {
     assertNoTransactionHazardForNoop(await inspectModelProfileTransactions(targets));
-    return "noop";
+    return { result: "noop", ...snapshot };
   }
 
-  return runModelProfileTransaction(targets, {
+  const result = await runModelProfileTransaction(targets, {
     operation: "switch",
     plan: async ({ canonicalContent, runtimeContent }) => {
-      // A profile can be archived while a switch waits for the shared lock.
+      // Registry changes may occur between preflight and lock acquisition.
       const currentRegistry = await loadRegistry(paths);
       if (!selectedProfile(currentRegistry, name)) throw new Error(`Unknown profile: ${name}`);
       const state = validateActiveState(
@@ -602,14 +609,19 @@ async function switchProfile(paths: ResolvedPaths, name: string): Promise<"chang
       );
 
       const nextProfile = deriveCanonicalProfileForSelection(name, currentRegistry.profiles, currentRegistry.manifest);
+      snapshot = { name, routing: nextProfile, runtimeRouting: normalizeGentleRouting(state.runtime.model_profiles, true) };
       if (profileMatchesState(state, nextProfile, currentRegistry.manifest) && !hasRetiredState(state)) return null;
 
       const nextCanonical: JsonObject = { ...withoutRetiredManagedAgents(state.canonical), ...nextProfile };
       const nextRuntime = deriveRuntimeConfigForSelection(name, currentRegistry.profiles, currentRegistry.manifest, state.runtime);
       runtimeProfilesObject(nextRuntime);
+      snapshot.runtimeRouting = normalizeGentleRouting(nextRuntime.model_profiles, true);
       return { canonicalContent: serialized(nextCanonical), runtimeContent: serialized(nextRuntime) };
     },
   });
+  // The session binds the routing captured under the mutation lock, never a
+  // later shared-file read that could belong to another instance's selection.
+  return { result, ...snapshot };
 }
 
 function invokingSessionId(ctx: unknown): string | undefined {
@@ -624,23 +636,31 @@ function invokingSessionId(ctx: unknown): string | undefined {
  * name is the preferred profile, else the registered profile the routing matches.
  * Returns whether profiles.json changed.
  */
-async function alignGentleProfiles(paths: ResolvedPaths, store: GentleProfileStore | undefined, sessionId: string | undefined, preferredName?: string, cwd?: string): Promise<boolean> {
-  const registry = await loadRegistry(paths);
-  const state = await readActiveState(paths, registry.manifest, false);
-  const routing: GentleRouting = Object.fromEntries(managedAgents(registry.manifest).map((agent) => [agent, { ...state.canonicalEntries[agent]! }]));
-  const names = registeredProfileNames(registry.manifest);
-  const candidates = preferredName ? [preferredName, ...names] : names;
-  const name = candidates.find((candidate) => profileMatchesState(state, deriveCanonicalProfileForSelection(candidate, registry.profiles, registry.manifest), registry.manifest))
-    ?? UNREGISTERED_GENTLE_PROFILE;
+async function alignGentleProfiles(paths: ResolvedPaths, store: GentleProfileStore | undefined, sessionId: string | undefined, preferredName?: string, cwd?: string, applied?: AppliedProfileSnapshot): Promise<boolean> {
+  let routing: GentleRouting;
+  let name: string;
+  let runtimeRouting: GentleRouting;
+  if (applied) {
+    ({ routing, name, runtimeRouting } = applied);
+  } else {
+    const registry = await loadRegistry(paths);
+    const state = await readActiveState(paths, registry.manifest, false);
+    routing = Object.fromEntries(managedAgents(registry.manifest).map((agent) => [agent, { ...state.canonicalEntries[agent]! }]));
+    runtimeRouting = normalizeGentleRouting(state.runtime.model_profiles, true);
+    const names = registeredProfileNames(registry.manifest);
+    const candidates = preferredName ? [preferredName, ...names] : names;
+    name = candidates.find((candidate) => profileMatchesState(state, deriveCanonicalProfileForSelection(candidate, registry.profiles, registry.manifest), registry.manifest))
+      ?? UNREGISTERED_GENTLE_PROFILE;
+  }
   if (sessionId) {
     let baseline = gentleSessionRouting(sessionId);
     if (baseline === undefined) {
-      baseline = normalizeGentleRouting(state.runtime.model_profiles);
+      baseline = runtimeRouting;
       if (cwd) {
         // Gentle ignores absent or malformed project config, retaining global routing.
         let project: unknown;
         try { project = JSON.parse(await readFile(join(cwd, ".pi", "subagents.json"), "utf8")); } catch { project = undefined; }
-        baseline = mergeGentleRouting(baseline, normalizeGentleRouting(isJsonObject(project) ? project.model_profiles : undefined));
+        baseline = mergeGentleRouting(baseline, normalizeGentleRouting(isJsonObject(project) ? project.model_profiles : undefined, true));
       }
     }
     bindGentleSessionProfile(sessionId, name, { ...baseline, ...routing });
@@ -878,6 +898,7 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
       }
 
       let switchResult: "changed" | "noop" = "noop";
+      let applied: AppliedProfileSnapshot | undefined;
       let gentleChanged = false;
       try {
         const registry = await loadRegistry(paths);
@@ -925,11 +946,13 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
             pi.setThinkingLevel(entry.thinking as typeof levels[number]);
           }
           if (pi.getThinkingLevel() !== entry.thinking) throw new Error(`Pi thinking readback differs from ${entry.thinking} (possibly clamped).`);
-          switchResult = await switchProfile(paths, parsed.name);
+          const switched = await switchProfile(paths, parsed.name);
+          switchResult = switched.result;
+          applied = switched;
         } catch (error) { await restore(error); }
         // The switch is committed and the session aligned: a Gentle failure is reported, not rolled back.
         try {
-          gentleChanged = await alignGentleProfiles(paths, gentleStore, invokingSessionId(ctx), parsed.name, ctx.cwd);
+          gentleChanged = await alignGentleProfiles(paths, gentleStore, invokingSessionId(ctx), parsed.name, ctx.cwd, applied);
         } catch (error) {
           ctx.ui.notify(`Gentle profile alignment failed (${error instanceof Error ? error.message : String(error)}); subagents may keep the previous Gentle profile until /gentle:profiles selects one.`, "warning");
         }
