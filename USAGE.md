@@ -83,7 +83,7 @@ In `/jb:odd-models edit`, the interactive **Model** dialog uses a bounded native
 | `/jb:odd-models <profile>` | Validates registered profiles and current files, aligns this Pi session with the effective `orchestrator` model and standard thinking level, writes changed canonical/runtime mappings, then reloads Pi only if files changed. No-op when session and files already match. |
 | `/jb:odd-models undo` | Reverts the last completed profile transaction only if both files still match the recorded transaction output, then reloads Pi. |
 | `/jb:odd-models recover` | Finishes, records, or clears an interrupted profile transaction when the current file bytes match a safe recorded state, then reloads Pi when recovery changed state. |
-| `/jb:odd-models edit` | Opens a Pi dialog to view, edit, or create a named profile from a template, or to Balance a new profile with one consented consultation of the current Pi model. Viewing is read-only; saving never changes the active profile. |
+| `/jb:odd-models edit` | Opens View/Edit/Create/Balance/Archive/Restore. Archive disables selection; Restore makes it available again. Neither activates a profile. Balance requires separate consent for one model consultation. |
 | `/jb:odd-models <invalid>` | Displays an unknown-argument warning and usage. Read-only. |
 
 Arguments are trimmed and case-insensitive. Dots and hyphens are supported in registered path-safe profile names, so `/jb:odd-models GPT-5.6-RECOMMENDED` selects `gpt-5.6-recommended`.
@@ -201,7 +201,7 @@ Recover completes, records, or clears the interrupted transaction only for recog
 /jb:odd-models edit
 ```
 
-Pi dialogs offer **View**, **Edit**, **Create**, or **Balance** (see [Balance a profile with the current model](#balance-a-profile-with-the-current-model)):
+Pi dialogs offer **View**, **Edit**, **Create**, **Balance**, **Archive**, or **Restore** (see [Balance](#balance-a-profile-with-the-current-model) and [Archive/Restore](#archive-or-restore-a-profile)):
 
 1. Choose Edit and a registered profile, or Create, a safe lowercase name, and an existing template.
 2. Choose a managed role, a live model, and a supported thinking level.
@@ -248,6 +248,18 @@ Thinking choices use local capability evidence, consistent with `doctor`'s conse
 Create clones every managed role from its template and registers the new profile in the manifest. New names cannot use reserved actions including `edit` or overwrite an existing file. Cancelled dialogs write nothing. Saving requires valid assignments for every role and explicit confirmation; it writes only `models.<profile>.json` and, for Create, the manifest. It never writes active `models.json`, `subagents.json`, session model/thinking, or reloads Pi. Only allowlisted identity/name/reasoning/thinking-map metadata enters the editor; SDK model objects, credentials, headers, and endpoints are not persisted.
 
 If the manifest or any loaded named profile changes while the editor is open, saving fails without writing. Reopen `/jb:odd-models edit` to load the current files and retry. The editor compares original file bytes, so formatting-only changes also count as drift. These are optimistic checks, not a lock: an external writer can still race in the small interval between the checks and writes. Individual files are replaced atomically, but creating a profile and registering it is not a crash-safe multi-file transaction. Avoid simultaneous file edits or installs while saving.
+
+## Archive or restore a profile
+
+1. Run `/jb:odd-models edit`, choose **Archive**, select an inactive profile, and confirm.
+2. Its definition moves from `models.<name>.json` to `models.<name>.json.back`; the manifest registration is marked `archived: true`. `/jb:odd-models` excludes it from activation, preview, list, completion, and editor templates. Its name stays reserved.
+3. To undo this, choose **Restore**, select the archived profile, and confirm. The original bytes return to `.json`, and the archive marker is removed. Activate it separately with `/jb:odd-models <name>`.
+
+Archive is blocked for the shared canonical active profile, the saved Gentle `active` profile, or the invoking session's explicit/inherited active profile. Select another profile first. These operations do not alter any live session, active mappings, model/thinking, or reload count, and require no live model catalog or provider call. Existing snapshots in other processes remain intact; the command cannot inventory their active profile names.
+
+Archived definitions remain readable only as existing opposite-provider judge dependencies, so archiving a paired profile does not silently change another profile's judge assignments. If an inactive manifest default is archived, the first remaining selectable registration becomes the manifest default without being activated. Existing independently saved `/gentle:profiles` entries are not deleted or hidden: Archive applies to this plugin's registry.
+
+Destination collisions, malformed archives, and registry drift are rejected without replacing user files. Archive/Restore share the switch/undo/recovery lock. The destination is reserved without overwrite before an atomic manifest update, and the source is removed last; a process interruption can leave an extra `.json` or `.back` copy, not a missing registered definition. Preserve both copies and inspect the manifest before manual recovery. Reinstall replaces the package registry; save custom definitions/archive state before updating.
 
 ## Balance a profile with the current model
 

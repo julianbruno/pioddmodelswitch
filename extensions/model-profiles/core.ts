@@ -46,6 +46,7 @@ export type RuntimeModelProfileEntry = {
 export type ProfileRegistration = {
   name: string;
   modelsFile: string;
+  archived?: boolean;
 };
 
 export type OppositeProviderJudgesConfig = {
@@ -152,14 +153,15 @@ function exactKeys(value: JsonObject, expected: readonly string[], label: string
 
 function assertProfileRegistration(value: unknown, index: number): ProfileRegistration {
   const object = assertJsonObject(value, `profiles[${index}]`);
-  exactKeys(object, ["name", "modelsFile"], `profiles[${index}]`);
+  exactKeys(object, object.archived === undefined ? ["name", "modelsFile"] : ["name", "modelsFile", "archived"], `profiles[${index}]`);
+  const archived = object.archived === undefined ? undefined : assertBoolean(object.archived, `profiles[${index}].archived`);
   const name = assertString(object.name, `profiles[${index}].name`);
   const modelsFile = assertString(object.modelsFile, `profiles[${index}].modelsFile`);
   assertSafeName(name, `profiles[${index}].name`);
   if (modelsFile !== `models.${name}.json`) {
     fail(`profiles[${index}].modelsFile must be models.${name}.json.`);
   }
-  return { name, modelsFile };
+  return { name, modelsFile, ...(archived === undefined ? {} : { archived }) };
 }
 
 function assertManifestReservedNames(value: unknown): string[] {
@@ -245,7 +247,7 @@ export function managedAgents(manifest: ModelProfilesManifest): string[] {
 }
 
 export function registeredProfileNames(manifest: ModelProfilesManifest): string[] {
-  return manifest.profiles.map((profile) => profile.name);
+  return manifest.profiles.filter((profile) => !profile.archived).map((profile) => profile.name);
 }
 
 export function validateManifest(input: unknown): ModelProfilesManifest {
@@ -274,6 +276,7 @@ export function validateManifest(input: unknown): ModelProfilesManifest {
   const defaultProfile = assertString(object.defaultProfile, "defaultProfile");
   assertSafeName(defaultProfile, "defaultProfile");
   if (!profileNames.includes(defaultProfile)) fail(`defaultProfile '${defaultProfile}' is not registered.`);
+  if (profiles.find(profile => profile.name === defaultProfile)?.archived) fail(`defaultProfile '${defaultProfile}' is archived.`);
 
   return {
     schemaVersion,
@@ -309,7 +312,7 @@ export function validateNamedProfile(input: unknown, manifest: ModelProfilesMani
 
 export function validateProfileSet(input: unknown, manifest: ModelProfilesManifest): Record<string, ValidatedModelProfile> {
   const object = assertJsonObject(input, "profilesByName");
-  const expectedNames = registeredProfileNames(manifest);
+  const expectedNames = manifest.profiles.map(profile => profile.name);
   exactKeys(object, expectedNames, "profilesByName");
   return Object.fromEntries(expectedNames.map((name) => [name, validateNamedProfile(object[name], manifest, name)]));
 }
@@ -349,7 +352,7 @@ export function deriveCanonicalProfileForSelection(
   manifest: ModelProfilesManifest,
 ): ValidatedModelProfile {
   const selected = profiles[profileName];
-  if (!selected) fail(`profile '${profileName}' is not registered.`);
+  if (!selected || !registeredProfileNames(manifest).includes(profileName)) fail(`profile '${profileName}' is not registered.`);
   const oppositeName = manifest.oppositeProviderJudges.enabled ? manifest.oppositeProviderJudges.profilePairs[profileName] : undefined;
   const opposite = oppositeName ? profiles[oppositeName] : undefined;
   const judgeAgents = new Set(activeOppositeProviderJudgeAgents(manifest));
@@ -378,7 +381,7 @@ export function deriveRuntimeConfigForSelection(
 }
 
 export function assertProfilesCoverManifest(profileByName: Record<string, ValidatedModelProfile>, manifest: ModelProfilesManifest): void {
-  const names = registeredProfileNames(manifest);
+  const names = manifest.profiles.map(profile => profile.name);
   exactKeys(profileByName, names, "validatedProfiles");
   const requiredAgents = new Set(managedAgents(manifest));
   for (const name of names) {

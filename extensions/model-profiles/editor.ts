@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { access, chmod, mkdir, open, readFile, rename, unlink } from "node:fs/promises";
+import { access, chmod, link, lstat, mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 
 // Plain allowlisted metadata only: SDK models never enter drafts or persistence.
@@ -56,6 +56,11 @@ export type ProfileEditorPaths = {
 export type ProfileEditorIO = {
   writeFile?: (path: string, content: string) => Promise<void>;
   unlink?: (path: string) => Promise<void>;
+};
+
+export type ProfileArchiveContext = {
+  assertCanArchive(name: string): Promise<void>;
+  withLock<T>(work: () => Promise<T>): Promise<T>;
 };
 
 export type ProfileEditorResult = {
@@ -191,7 +196,7 @@ async function loadRegistry(paths: ProfileEditorPaths): Promise<EditorRegistry> 
   const manifest = validateManifest(await readJsonObject(assertWithin(paths.gentleDir, paths.manifestPath, "Manifest path"), "Model profile manifest", originalFiles));
   const profiles: Record<string, ValidatedModelProfile> = Object.create(null);
   for (const registration of manifest.profiles) {
-    const profilePath = assertWithin(paths.gentleDir, join(paths.gentleDir, registration.modelsFile), `Profile ${registration.name} path`);
+    const profilePath = assertWithin(paths.gentleDir, join(paths.gentleDir, `${registration.modelsFile}${registration.archived ? ".back" : ""}`), `Profile ${registration.name} path`);
     profiles[registration.name] = validateNamedProfile(
       await readJsonObject(profilePath, `Profile ${registration.name}`, originalFiles),
       manifest,
@@ -230,7 +235,7 @@ function formatProfile(name: string, profile: ValidatedModelProfile, agents: rea
 }
 
 function validateNewProfileName(name: string, manifest: ModelProfilesManifest, paths: ProfileEditorPaths): string | undefined {
-  const reserved = new Set<string>([...RESERVED_COMMAND_NAMES, ...manifest.reservedCommandNames, ...registeredProfileNames(manifest)]);
+  const reserved = new Set<string>([...RESERVED_COMMAND_NAMES, ...manifest.reservedCommandNames, ...manifest.profiles.map(profile => profile.name)]);
   if (reserved.has(name) || reserved.has(name.toLowerCase())) {
     return `Profile name '${name}' is reserved or already registered.`;
   }
@@ -407,12 +412,80 @@ async function editDraft(options: {
   }
 }
 
+async function archiveProfile(
+  ui: ProfileEditorUI, paths: ProfileEditorPaths, registry: EditorRegistry,
+  restore: boolean, lifecycle?: ProfileArchiveContext, io?: ProfileEditorIO,
+): Promise<ProfileEditorResult> {
+  if (!lifecycle) {
+    ui.notify("Archive/Restore requires an active-profile guard and shared transaction lock.", "error");
+    return { wrote: false, cancelled: false };
+  }
+  const names = registry.manifest.profiles.filter(profile => Boolean(profile.archived) === restore).map(profile => profile.name);
+  if (!names.length) {
+    ui.notify(restore ? "No archived profiles to restore." : "No profiles to archive.", "info");
+    return { wrote: false, cancelled: false };
+  }
+  const name = await ui.select(restore ? "Restore profile" : "Archive profile", names);
+  if (!name) return { wrote: false, cancelled: true };
+  try {
+    if (!names.includes(name)) throw new Error(`Unknown profile: ${name}`);
+    if (!restore) await lifecycle.assertCanArchive(name);
+    const registration = registry.manifest.profiles.find(profile => profile.name === name)!;
+    const source = assertWithin(paths.gentleDir, join(paths.gentleDir, `${registration.modelsFile}${restore ? ".back" : ""}`), "Archive source");
+    const destination = assertWithin(paths.gentleDir, join(paths.gentleDir, `${registration.modelsFile}${restore ? "" : ".back"}`), "Archive destination");
+    if (await exists(destination)) throw new Error(`Profile file ${basename(destination)} already exists; refusing to overwrite it.`);
+    if (!await ui.confirm(restore ? "Restore profile?" : "Archive profile?", `${restore ? "Restore" : "Archive"} ${name}. Active sessions will not change.`)) return { wrote: false, cancelled: true };
+    await lifecycle.withLock(async () => {
+      await assertRegistryUnchanged(registry.originalFiles);
+      if (!restore) await lifecycle.assertCanArchive(name);
+      if (!(await lstat(source)).isFile()) throw new Error("Archive source must be a regular file.");
+      const remaining = registry.manifest.profiles.filter(profile => profile.name !== name && !profile.archived);
+      const next = validateManifest({
+        ...registry.manifest,
+        defaultProfile: !restore && registry.manifest.defaultProfile === name ? remaining[0]?.name : registry.manifest.defaultProfile,
+        profiles: registry.manifest.profiles.map(profile => {
+          if (profile.name !== name) return profile;
+          const { archived: _archived, ...original } = profile;
+          return restore ? original : { ...original, archived: true };
+        }),
+      });
+      // A hard link reserves the destination without replacing any competing file.
+      // Commit the manifest before removing the source: interruption leaves at worst
+      // an extra copy, never a manifest referring to a missing profile definition.
+      await link(source, destination);
+      const previous = registry.originalFiles.find(file => file.path === resolve(paths.manifestPath))!.bytes.toString("utf8");
+      const content = serialized(next);
+      const write = io?.writeFile ?? atomicWrite;
+      let manifestWritten = false;
+      try {
+        await assertRegistryUnchanged(registry.originalFiles);
+        await write(paths.manifestPath, content);
+        manifestWritten = true;
+        await unlink(source);
+      } catch (error) {
+        // Roll back only our known output; external edits are never overwritten.
+        const current = await readFile(paths.manifestPath, "utf8");
+        if (manifestWritten && current === content) await write(paths.manifestPath, previous);
+        else if (current !== previous) throw new Error(`Archive interrupted; preserve ${basename(source)} and ${basename(destination)} and inspect the changed manifest. ${String(error)}`);
+        await unlink(destination);
+        throw error;
+      }
+    });
+    ui.notify(restore ? `Restored profile ${name}. Select it separately to activate it.` : `Archived profile ${name}. Active sessions were not changed.`, "info");
+    return { wrote: true, cancelled: false };
+  } catch (error) {
+    ui.notify(error instanceof Error ? error.message : String(error), "error");
+    return { wrote: false, cancelled: false };
+  }
+}
+
 export async function runProfileEditor(
   ui: ProfileEditorUI,
   paths: ProfileEditorPaths,
   io?: ProfileEditorIO,
   modelRegistry?: ProfileEditorModelRegistry,
   consultation?: BalanceConsultation,
+  lifecycle?: ProfileArchiveContext,
 ): Promise<ProfileEditorResult> {
   let registry: EditorRegistry;
   try {
@@ -424,8 +497,10 @@ export async function runProfileEditor(
 
   const agents = managedAgents(registry.manifest);
   const names = registeredProfileNames(registry.manifest);
-  const action = await ui.select("Profile editor", [MENU_VIEW, MENU_EDIT, MENU_CREATE, "Balance"]);
+  const action = await ui.select("Profile editor", [MENU_VIEW, MENU_EDIT, MENU_CREATE, "Balance", "Archive", "Restore"]);
   if (!action) return { wrote: false, cancelled: true };
+
+  if (action === "Archive" || action === "Restore") return archiveProfile(ui, paths, registry, action === "Restore", lifecycle, io);
 
   if (action === MENU_VIEW) {
     const name = await ui.select("View profile", names);

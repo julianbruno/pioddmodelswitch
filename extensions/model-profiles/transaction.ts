@@ -421,6 +421,18 @@ async function commitRecord(record: JournalRecord, targets: ResolvedTargets): Pr
   await removeActiveJournal(targets);
 }
 
+/** Serialize registry lifecycle writes with switches, undo, and recovery. */
+export async function withModelProfileRegistryLock<T>(inputTargets: ModelProfileTransactionTargets, work: () => Promise<T>): Promise<T> {
+  const targets = resolveTargets(inputTargets);
+  const lock = await acquireLock(targets);
+  try {
+    if (await readActiveJournal(targets)) throw new Error("A model profile transaction is already active; run recover before starting another mutation.");
+    return await work();
+  } finally {
+    await releaseLock(targets, lock);
+  }
+}
+
 export async function runModelProfileTransaction(
   inputTargets: ModelProfileTransactionTargets,
   options: { operation: ModelProfileTransactionOperation; plan: ModelProfileTransactionPlan; faultHook?: ModelProfileTransactionFaultHook },

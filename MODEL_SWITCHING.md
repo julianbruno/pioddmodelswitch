@@ -4,7 +4,7 @@
 
 ## Shared scope and live session
 
-Selection changes **shared persisted configuration**, not session-local routing. Sessions using the same target paths share `gentle-ai/models.json` and `agent/subagents.json`. Direct selection also aligns the invoking session's live orchestrator model and thinking, then reloads only that caller when files changed. It does not broadcast live model changes to other sessions.
+Selection changes **shared persisted defaults** and the **invoking session's routing snapshot**. Sessions using the same paths share `gentle-ai/models.json` and `agent/subagents.json`, but explicit/inherited Gentle snapshots keep open sessions independent. Direct selection aligns only the invoking orchestrator and binds its children/reviewers; only that caller reloads when files changed. No live changes are broadcast.
 
 Different Pi instances can share a home and keep distinct profiles through their Gentle session bindings. Lane scripts are optional isolation for persisted defaults; see [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes).
 
@@ -19,7 +19,7 @@ Status separates these sources:
 
 The compatibility label `Active ODD profile` is retained with an explicit shared-persisted qualifier; it describes the same saved mapping, not the live session.
 
-A mismatch does not identify its cause or prove what children or reviewers actually execute. Other sessions are not observed, and refresh timing is not guaranteed. No session isolation or routing authority changes are introduced.
+A status mismatch does not establish what a provider actually executes. The Gentle bridge preserves the invoking session's custom routes and uses the installed shared Symbol binding contract; explicit/inherited snapshots survive in-process reload. New/resumed sessions resolve defaults anew, and already queued/running children keep captured routing. This does not prove provider access.
 
 ## Data flow
 
@@ -31,13 +31,15 @@ flowchart LR
   V --> O["Apply opposite-provider judge routing for paired profiles"]
   O --> A["gentle-ai/models.json\nmodel + thinking"]
   O --> R["agent/subagents.json\nmodel_profiles: model + effort"]
-  R --> G["Gentle Pi native agent runtime"]
+  O --> B["Invoking session Gentle binding + optional saved active profile"]
+  B --> G["Gentle Pi native agent runtime"]
+  R --> G
   G --> S["ODD agent invocation"]
   A --> T["status/preview/doctor detection"]
   R --> T
 ```
 
-Paths are relative to `PI_HOME`, which defaults to `~/.pi`. The extension also imports helper modules from `extensions/model-profiles/`, so installed packages must ship that directory next to `extensions/jb-odd-model-profiles.ts`.
+Explicit injected paths or `PI_HOME` select the plugin sandbox. Without those, `GENTLE_PI_CONFIG_HOME` and `GENTLE_PI_AGENT_HOME` / `PI_CODING_AGENT_DIR` override the standard `~/.pi` config/agent homes. The extension also imports helper modules from `extensions/model-profiles/`, so installed packages must ship that directory next to `extensions/jb-odd-model-profiles.ts`.
 
 ## Commands
 
@@ -46,14 +48,18 @@ Paths are relative to `PI_HOME`, which defaults to `~/.pi`. The extension also i
 | `/jb:odd-models` | No | No | Status plus usage. |
 | `/jb:odd-models status` | No | No | Active-state and drift report. |
 | `/jb:odd-models doctor` | No | No | Read-only diagnostics for files, local catalog evidence, auth status evidence, and transaction journals/locks. |
-| `/jb:odd-models list` | No | No | Registered profiles from the manifest. |
-| `/jb:odd-models edit` | Named profile; manifest for Create/Balance only | No | View/Edit/Create using all invoking live auth-available models, or Balance with one consented current-model consultation; saving is not activation. |
+| `/jb:odd-models list` | On selection | On changed selection | Picks and activates a selectable profile with UI; read-only list without UI. |
+| `/jb:odd-models edit` | Named profile/manifest; `.json.back` for Archive/Restore | No | View/Edit/Create/Balance/Archive/Restore. Saving and restoring are not activation; Archive blocks active profiles. |
 | `/jb:odd-models preview <profile>` | No | No | Before → after canonical/runtime mapping for each managed agent. |
 | `/jb:odd-models <profile>` | Yes, unless already aligned | Yes, only after writes | Activate a registered profile. |
 | `/jb:odd-models undo` | Yes, if safe | Yes, after undo | Revert the last completed transaction when no intervening edits exist. |
 | `/jb:odd-models recover` | Sometimes | Yes, after changed recovery | Finish, record, or clear an interrupted transaction from recorded safe states. |
 
 A switch that is already semantically aligned leaves bytes and mtimes untouched and does not call reload, even if the files use different JSON formatting. Direct selection still aligns the current Pi session to the effective selected `orchestrator` model and thinking; when both files and session already match, it makes no model call or reload.
+
+## Archive and restore
+
+Use `/jb:odd-models edit` → **Archive** to disable an inactive named profile and move its original bytes to `.json.back`. Choose **Restore** to make it selectable again, then activate it separately. Archived names are excluded from selection, preview, completion, View/Edit, and templates, but remain reserved. Definitions needed by opposite-provider judges remain readable as dependencies; active routing never changes implicitly. See [the full flow and recovery limits](USAGE.md#archive-or-restore-a-profile).
 
 ## Opposite-provider judges
 

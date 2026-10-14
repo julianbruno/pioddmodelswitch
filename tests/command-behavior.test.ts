@@ -7,7 +7,7 @@ import test from "node:test";
 
 import oddModelProfiles, { balanceProgress } from "../extensions/jb-odd-model-profiles.ts";
 import { RETIRED_MANAGED_AGENTS } from "../extensions/model-profiles/core.ts";
-import { inspectModelProfileTransactions } from "../extensions/model-profiles/transaction.ts";
+import { inspectModelProfileTransactions, runModelProfileTransaction } from "../extensions/model-profiles/transaction.ts";
 
 type RegisteredCommand = {
   description: string;
@@ -122,7 +122,7 @@ async function snapshotTree(root: string): Promise<Array<{ path: string; type: "
   return records;
 }
 
-async function createHarness(useEnvironment = false) {
+async function createHarness(useEnvironment = false, agentOverride: "gentle" | "pi" = "gentle") {
   const root = await mkdir(join(tmpdir(), `odd-model-profiles-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`), { recursive: true });
   const piHome = root;
   const gentleDir = join(piHome, "gentle-ai");
@@ -173,7 +173,8 @@ async function createHarness(useEnvironment = false) {
   };
   if (useEnvironment) {
     process.env.GENTLE_PI_CONFIG_HOME = gentleDir;
-    process.env.GENTLE_PI_AGENT_HOME = agentDir;
+    process.env.GENTLE_PI_AGENT_HOME = agentOverride === "gentle" ? agentDir : "";
+    process.env.PI_CODING_AGENT_DIR = agentDir;
     delete process.env.PI_HOME;
   }
   oddModelProfiles(pi as any, useEnvironment ? {} : { piHome });
@@ -1039,11 +1040,11 @@ for (const baseline of ["explicit", "frozen", "runtime"]) test(`switch preserves
   }
 });
 
-test("default paths honor Gentle config and agent home overrides", async () => {
+for (const agentOverride of ["gentle", "pi"] as const) test(`default paths honor Gentle config and ${agentOverride} agent home overrides`, async () => {
   const keys = ["PI_HOME", "GENTLE_PI_CONFIG_HOME", "GENTLE_PI_AGENT_HOME", "PI_CODING_AGENT_DIR"];
   const saved = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   try {
-    const h = await createHarness(true);
+    const h = await createHarness(true, agentOverride);
     await h.command.handler("local", h.ctx);
     assert.deepEqual((await readJson(h.canonicalPath)).orchestrator, { model: "local/orchestrator", thinking: "medium" });
     assert.deepEqual((await readJson(h.runtimePath)).model_profiles.orchestrator, { model: "local/orchestrator", effort: "medium" });
@@ -1092,5 +1093,166 @@ test("Grok OpenAI and Claude sessions retain independent bindings in the same ho
     assert.deepEqual(sessions[1].current(), { provider: "local", id: "orchestrator" });
   } finally {
     sessions.forEach(session => gentleBindings().delete(session.id));
+  }
+});
+
+async function editorAction(h: Awaited<ReturnType<typeof createHarness>>, action: string, name: string, confirm = true) {
+  h.ctx.ui.select = async title => title === "Profile editor" ? action : name;
+  h.ctx.ui.confirm = async () => confirm;
+  h.ctx.ui.input = async () => undefined;
+  await h.command.handler("edit", h.ctx);
+}
+
+test("archive disables a profile, renames it to .back, and restore makes it selectable", async () => {
+  const h = await createHarness();
+  const file = join(h.gentleDir, "models.local.json");
+  const original = await readFile(file, "utf8");
+  const canonical = await readFile(h.canonicalPath, "utf8");
+  const runtime = await readFile(h.runtimePath, "utf8");
+  await editorAction(h, "Archive", "local");
+  assert.equal(h.notifications.at(-1)?.message, "Archived profile local. Active sessions were not changed.");
+  assert.equal(h.notifications.at(-1)?.level, "info");
+  await assert.rejects(stat(file), { code: "ENOENT" });
+  assert.equal(await readFile(`${file}.back`, "utf8"), original);
+  assert.equal(h.command.getArgumentCompletions!("local"), null);
+  const archivedTree = await snapshotTree(h.root);
+  for (const argument of ["local", "preview local"]) {
+    await h.command.handler(argument, h.ctx);
+    assert.match(h.notifications.at(-1)?.message ?? "", /Unknown profile: local/);
+    assert.deepEqual(await snapshotTree(h.root), archivedTree);
+  }
+  await h.command.handler("list", { ...h.ctx, ui: { notify: h.ctx.ui.notify } });
+  assert.doesNotMatch(h.notifications.at(-1)?.message ?? "", /(?:^|\n)local(?:\s|$)/);
+  assert.equal(await readFile(h.canonicalPath, "utf8"), canonical);
+  assert.equal(await readFile(h.runtimePath, "utf8"), runtime);
+  assert.equal(h.reloadCount(), 0);
+  await editorAction(h, "Restore", "local");
+  assert.equal(h.notifications.at(-1)?.message, "Restored profile local. Select it separately to activate it.");
+  assert.equal(await readFile(file, "utf8"), original);
+  await assert.rejects(stat(`${file}.back`), { code: "ENOENT" });
+  assert.ok(h.command.getArgumentCompletions!("local")?.some(choice => choice.value === "local"));
+  await h.command.handler("local", h.ctx);
+  assert.equal(h.session().model.provider, "local");
+});
+
+for (const mode of ["active", "cancel", "collision"]) test(`archive ${mode} leaves stored data and session unchanged`, async () => {
+  const h = await createHarness();
+  const name = mode === "active" ? "openai" : "local";
+  if (mode === "collision") await writeFile(join(h.gentleDir, "models.local.json.back"), "external bytes");
+  const before = await snapshotTree(h.root);
+  const session = h.session();
+  await editorAction(h, "Archive", name, mode !== "cancel");
+  if (mode === "active") assert.match(h.notifications.at(-1)?.message ?? "", /Cannot archive active profile openai/);
+  if (mode === "collision") assert.match(h.notifications.at(-1)?.message ?? "", /already exists/);
+  assert.deepEqual(await snapshotTree(h.root), before);
+  assert.deepEqual(h.session(), session);
+  assert.equal(h.reloadCount(), 0);
+});
+
+test("archive blocks a profile bound to the invoking session even after another session changes shared files", async () => {
+  const h = await createHarness();
+  const id = `archive-${h.root}`;
+  (h.ctx as any).sessionManager = { getSessionId: () => id };
+  gentleBindings().set(id, { name: "local", modelProfiles: profile("local", "medium") });
+  try {
+    const before = await snapshotTree(h.root);
+    await editorAction(h, "Archive", "local");
+    assert.match(h.notifications.at(-1)?.message ?? "", /Cannot archive active profile local/);
+    assert.deepEqual(await snapshotTree(h.root), before);
+    assert.equal(gentleBindings().get(id)?.name, "local");
+  } finally { gentleBindings().delete(id); }
+});
+
+test("archived opposite-provider definition still supplies existing judges without being selectable", async () => {
+  const h = await createHarness();
+  await editorAction(h, "Archive", "grok");
+  assert.equal(h.notifications.at(-1)?.level, "info");
+  await h.command.handler("openai", h.ctx);
+  assert.equal(h.notifications.at(-1)?.level, "info");
+  assert.deepEqual((await readJson(h.canonicalPath))["review-risk"], { model: "xai/review-risk", thinking: "xhigh" });
+  await h.command.handler("grok", h.ctx);
+  assert.match(h.notifications.at(-1)?.message ?? "", /Unknown profile: grok/);
+  assert.equal(h.session().model.provider, "openai-codex");
+});
+
+test("restore collision and corrupted archive preserve stored bytes and active state", async () => {
+  const h = await createHarness();
+  await editorAction(h, "Archive", "local");
+  const file = join(h.gentleDir, "models.local.json");
+  await writeFile(file, "external bytes");
+  let before = await snapshotTree(h.root);
+  await editorAction(h, "Restore", "local");
+  assert.match(h.notifications.at(-1)?.message ?? "", /already exists/);
+  assert.deepEqual(await snapshotTree(h.root), before);
+  await writeFile(`${file}.back`, "invalid json");
+  before = await snapshotTree(h.root);
+  await editorAction(h, "Restore", "local");
+  assert.match(h.notifications.at(-1)?.message ?? "", /not valid JSON/);
+  assert.deepEqual(await snapshotTree(h.root), before);
+  assert.equal(h.reloadCount(), 0);
+});
+
+test("archiving the inactive default selects a remaining default without activating it", async () => {
+  const h = await createHarness();
+  await h.command.handler("local", h.ctx);
+  const active = await readFile(h.canonicalPath, "utf8");
+  await editorAction(h, "Archive", "openai");
+  assert.equal(h.notifications.at(-1)?.level, "info");
+  const manifest = await readJson(join(h.gentleDir, "model-profiles.manifest.json"));
+  assert.equal(manifest.defaultProfile, "grok");
+  assert.equal(manifest.profiles.find((entry: any) => entry.name === "openai").archived, true);
+  assert.equal(await readFile(h.canonicalPath, "utf8"), active);
+  assert.equal(h.session().model.provider, "local");
+});
+
+test("archive detects registry drift at confirmation without overwriting external bytes", async () => {
+  const h = await createHarness();
+  h.ctx.ui.select = async title => title === "Profile editor" ? "Archive" : "local";
+  h.ctx.ui.input = async () => undefined;
+  const file = join(h.gentleDir, "models.local.json");
+  h.ctx.ui.confirm = async () => { await writeFile(file, "external bytes"); return true; };
+  await h.command.handler("edit", h.ctx);
+  assert.match(h.notifications.at(-1)?.message ?? "", /changed since the editor opened/);
+  assert.equal(await readFile(file, "utf8"), "external bytes");
+  await assert.rejects(stat(`${file}.back`), { code: "ENOENT" });
+  assert.equal((await readJson(join(h.gentleDir, "model-profiles.manifest.json"))).profiles.find((entry: any) => entry.name === "local").archived, undefined);
+  assert.equal(h.reloadCount(), 0);
+});
+
+test("archive and switches share the transaction lock", async () => {
+  const h = await createHarness();
+  let finish!: () => void;
+  let started!: () => void;
+  const ready = new Promise<void>(resolve => { started = resolve; });
+  const release = new Promise<void>(resolve => { finish = resolve; });
+  const pending = runModelProfileTransaction({ canonicalPath: h.canonicalPath, runtimePath: h.runtimePath, journalDir: h.journalDir }, {
+    operation: "switch", plan: async () => { started(); await release; return null; },
+  });
+  await ready;
+  try {
+    const before = await snapshotTree(h.root);
+    await editorAction(h, "Archive", "local");
+    assert.match(h.notifications.at(-1)?.message ?? "", /lock is already held/);
+    assert.deepEqual(await snapshotTree(h.root), before);
+  } finally { finish(); await pending; }
+});
+
+test("explicit options and PI_HOME preserve sandbox precedence over Gentle overrides", async () => {
+  const h = await createHarness();
+  const keys = ["PI_HOME", "GENTLE_PI_CONFIG_HOME", "GENTLE_PI_AGENT_HOME", "PI_CODING_AGENT_DIR"];
+  const saved = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  try {
+    process.env.PI_HOME = h.root;
+    for (const key of keys.slice(1)) process.env[key] = join(h.root, "unused-override");
+    for (const options of [{}, { piHome: h.root }]) {
+      let command!: RegisteredCommand;
+      oddModelProfiles({ ...h.pi, registerCommand: (_name: string, value: RegisteredCommand) => { command = value; } } as any, options);
+      await command.handler("local", h.ctx);
+      assert.equal(h.notifications.at(-1)?.level, "info");
+      assert.equal(h.session().model.provider, "local");
+      await assert.rejects(stat(join(h.root, "unused-override")), { code: "ENOENT" });
+    }
+  } finally {
+    for (const key of keys) if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
   }
 });

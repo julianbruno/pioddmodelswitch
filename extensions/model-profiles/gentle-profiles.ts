@@ -50,6 +50,13 @@ export function gentleSessionRouting(sessionId: string | undefined): GentleRouti
   return inherited ? normalizeGentleRouting(inherited.modelProfiles) : undefined;
 }
 
+export function gentleSessionProfileName(sessionId: string | undefined): string | undefined {
+  if (!sessionId) return undefined;
+  const holder = globalThis as any;
+  return holder[SESSION_BINDINGS_KEY]?.get(sessionId)?.name
+    ?? holder[Symbol.for("gentle-pi:session-profile-freeze")]?.frozen?.get(sessionId)?.profile?.name;
+}
+
 /** Merge project overrides field by field, just like Gentle's materialized config. */
 export function mergeGentleRouting(base: GentleRouting, override: GentleRouting): GentleRouting {
   const merged = { ...base };

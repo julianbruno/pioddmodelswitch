@@ -29,6 +29,7 @@ import {
   recoverModelProfileTransaction,
   runModelProfileTransaction,
   undoLastModelProfileTransaction,
+  withModelProfileRegistryLock,
   type ModelProfileTransactionTargets,
 } from "./model-profiles/transaction.ts";
 import { runProfileEditor } from "./model-profiles/editor.ts";
@@ -36,6 +37,7 @@ import {
   alignGentleProfileStore,
   bindGentleSessionProfile,
   gentleSessionRouting,
+  gentleSessionProfileName,
   mergeGentleRouting,
   normalizeGentleRouting,
   readGentleProfileStore,
@@ -138,7 +140,7 @@ async function loadRegistry(paths: ResolvedPaths): Promise<ProfileRegistry> {
   const profileInputs: JsonObject = Object.create(null);
   for (const registration of manifest.profiles) {
     profileInputs[registration.name] = await readJsonObject(
-      profilePath(paths, registration.modelsFile, registration.name),
+      `${profilePath(paths, registration.modelsFile, registration.name)}${registration.archived ? ".back" : ""}`,
       `Profile ${registration.name}`,
     );
   }
@@ -243,7 +245,7 @@ function runtimeProfilesObject(runtime: JsonObject): JsonObject {
 }
 
 function selectedProfile(registry: ProfileRegistry, name: string): ValidatedModelProfile | undefined {
-  return hasOwnKey(registry.profiles, name) ? registry.profiles[name] : undefined;
+  return registeredProfileNames(registry.manifest).includes(name) && hasOwnKey(registry.profiles, name) ? registry.profiles[name] : undefined;
 }
 
 function usage(manifest?: ModelProfilesManifest): string {
@@ -588,19 +590,22 @@ async function switchProfile(paths: ResolvedPaths, name: string): Promise<"chang
 
   return runModelProfileTransaction(targets, {
     operation: "switch",
-    plan: ({ canonicalContent, runtimeContent }) => {
+    plan: async ({ canonicalContent, runtimeContent }) => {
+      // A profile can be archived while a switch waits for the shared lock.
+      const currentRegistry = await loadRegistry(paths);
+      if (!selectedProfile(currentRegistry, name)) throw new Error(`Unknown profile: ${name}`);
       const state = validateActiveState(
         parseJsonObject(canonicalContent, "Active canonical profile", paths.canonicalPath),
         parseJsonObject(runtimeContent, "Runtime configuration", paths.runtimePath),
-        registry.manifest,
+        currentRegistry.manifest,
         { allowMissingManagedEntries: true },
       );
 
-      const nextProfile = deriveCanonicalProfileForSelection(name, registry.profiles, registry.manifest);
-      if (profileMatchesState(state, nextProfile, registry.manifest) && !hasRetiredState(state)) return null;
+      const nextProfile = deriveCanonicalProfileForSelection(name, currentRegistry.profiles, currentRegistry.manifest);
+      if (profileMatchesState(state, nextProfile, currentRegistry.manifest) && !hasRetiredState(state)) return null;
 
       const nextCanonical: JsonObject = { ...withoutRetiredManagedAgents(state.canonical), ...nextProfile };
-      const nextRuntime = deriveRuntimeConfigForSelection(name, registry.profiles, registry.manifest, state.runtime);
+      const nextRuntime = deriveRuntimeConfigForSelection(name, currentRegistry.profiles, currentRegistry.manifest, state.runtime);
       runtimeProfilesObject(nextRuntime);
       return { canonicalContent: serialized(nextCanonical), runtimeContent: serialized(nextRuntime) };
     },
@@ -673,7 +678,7 @@ function completionItems(paths: ResolvedPaths, prefix: string): Array<{ value: s
     { value: "doctor", label: "doctor — Diagnose profile files, local catalog, and transaction state without writing" },
     { value: "undo", label: "undo — Revert the last completed profile transaction if files still match" },
     { value: "recover", label: "recover — Finish or clear an interrupted profile transaction" },
-    { value: "edit", label: "edit — View, edit, or create a named profile" },
+    { value: "edit", label: "edit — View, edit, create, archive, or restore a named profile" },
     ...profileNames.map((name) => ({ value: name, label: `${name} — Activate ${name} profile` })),
   ].filter(({ value }) => value.startsWith(normalized));
   return options.length ? options : null;
@@ -729,7 +734,7 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
   const paths = resolvePaths(options);
 
   pi.registerCommand(COMMAND_NAME, {
-    description: "Show shared persisted ODD mappings and the invoking live orchestrator, or change the shared profile.",
+    description: "Show ODD routing, select a session-bound profile with shared defaults, or edit/archive/restore named profiles.",
     getArgumentCompletions: (prefix: string) => completionItems(paths, prefix),
     handler: async (args, ctx) => {
       let parsed = parseArgs(args);
@@ -848,7 +853,20 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
               options as Parameters<typeof ctx.modelRegistry.streamSimple>[2],
             ),
             progress: work => balanceProgress(ctx.ui, work),
-          } : undefined);
+          } : undefined, {
+            withLock: work => withModelProfileRegistryLock(transactionTargets(paths), work),
+            assertCanArchive: async name => {
+              const registry = await loadRegistry(paths);
+              const state = await readActiveState(paths, registry.manifest, true);
+              const candidate = deriveCanonicalProfileForSelection(name, registry.profiles, registry.manifest);
+              const sharedActive = managedAgents(registry.manifest).every(agent =>
+                state.canonicalEntries[agent]?.model === candidate[agent].model && state.canonicalEntries[agent]?.thinking === candidate[agent].thinking);
+              const store = await readGentleProfileStore(paths.gentleProfilesPath);
+              if (sharedActive || store?.store.active === name || gentleSessionProfileName(invokingSessionId(ctx)) === name) {
+                throw new Error(`Cannot archive active profile ${name}. Select another profile first.`);
+              }
+            },
+          });
         } catch (error) {
           ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
         }
