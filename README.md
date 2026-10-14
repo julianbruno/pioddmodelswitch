@@ -36,7 +36,7 @@ pi
 
 For the installer, `PI_HOME` selects the target only. For a live launch, keep all four variables aligned so the plugin, Pi, and Gentle read that home's files rather than mixing custom and global routing.
 
-To run two Pi instances at the same time with different ODD profiles, give each its own home with the lane scripts (`scripts/setup-odd-lanes.sh`, `scripts/pi-opus.sh`, `scripts/pi-gpt.sh`, `scripts/pi-grok.sh`). Instances sharing one home still share one profile. See [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes).
+Pi instances sharing one home can keep distinct ODD profiles: select the desired profile inside each instance to bind its own Gentle routing snapshot. Shared saved defaults affect new/resumed sessions, not existing bindings. Optional lane scripts also isolate persisted defaults. See [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes).
 
 ## Documentation
 

@@ -13,7 +13,7 @@
 //     (gentle-pi lib/session-profile-binding.ts), which outranks the frozen snapshot.
 import { readFile } from "node:fs/promises";
 
-import { isJsonObject, type JsonObject, type ModelProfileEntry } from "./core.ts";
+import { isJsonObject, RETIRED_MANAGED_AGENTS, type JsonObject } from "./core.ts";
 import { writeDurableFile } from "./transaction.ts";
 
 export const GENTLE_PROFILES_KIND = "gentle-pi.agent_model_profiles";
@@ -25,7 +25,37 @@ const PROFILE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const RESERVED_PROFILE_NAMES = new Set(["__proto__", "constructor", "prototype"]);
 const ORCHESTRATOR_KEY = "orchestrator";
 
-export type GentleRouting = Record<string, ModelProfileEntry>;
+export type GentleRouting = Record<string, { model?: string; thinking?: string }>;
+const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+
+/** Normalize both canonical and materialized routes using Gentle's accepted fields. */
+export function normalizeGentleRouting(value: unknown): GentleRouting {
+  if (!isJsonObject(value)) return {};
+  return Object.fromEntries(Object.entries(value).flatMap(([agent, entry]) => {
+    if (!isJsonObject(entry) || (RETIRED_MANAGED_AGENTS as readonly string[]).includes(agent)) return [];
+    const model = typeof entry.model === "string" && entry.model.trim() ? entry.model.trim() : undefined;
+    const level = entry.effort ?? entry.thinking;
+    const thinking = typeof level === "string" && THINKING_LEVELS.has(level) ? level : undefined;
+    return model || thinking ? [[agent, { ...(model ? { model } : {}), ...(thinking ? { thinking } : {}) }]] : [];
+  }));
+}
+
+/** Preserve the caller's explicit selection, then its inherited startup snapshot. */
+export function gentleSessionRouting(sessionId: string | undefined): GentleRouting | undefined {
+  if (!sessionId) return undefined;
+  const holder = globalThis as any;
+  const explicit = holder[SESSION_BINDINGS_KEY]?.get(sessionId);
+  if (explicit) return normalizeGentleRouting(explicit.modelProfiles);
+  const inherited = holder[Symbol.for("gentle-pi:session-profile-freeze")]?.frozen?.get(sessionId)?.profile;
+  return inherited ? normalizeGentleRouting(inherited.modelProfiles) : undefined;
+}
+
+/** Merge project overrides field by field, just like Gentle's materialized config. */
+export function mergeGentleRouting(base: GentleRouting, override: GentleRouting): GentleRouting {
+  const merged = { ...base };
+  for (const [agent, entry] of Object.entries(override)) merged[agent] = { ...merged[agent], ...entry };
+  return merged;
+}
 
 export type GentleProfileStore = {
   path: string;
@@ -71,7 +101,8 @@ export function assertGentleProfileName(name: string): void {
 export async function alignGentleProfileStore(current: GentleProfileStore, name: string, routing: GentleRouting): Promise<boolean> {
   assertGentleProfileName(name);
   const profiles = current.store.profiles as JsonObject;
-  const next = { ...current.store, profiles: { ...profiles, [name]: routing }, active: name };
+  const savedRouting = { ...normalizeGentleRouting(profiles[name]), ...routing };
+  const next = { ...current.store, profiles: { ...profiles, [name]: savedRouting }, active: name };
   const content = `${JSON.stringify(next, null, 2)}\n`;
   if (content === current.content) return false;
   if (await readFile(current.path, "utf8") !== current.content) {

@@ -1,6 +1,8 @@
 # Model profile scope: current state and improvement options
 
-## Executive conclusion
+> **Current implementation:** `/jb:odd-models` now binds the invoking session through the installed Gentle profile bridge, preserving custom routes and other sessions' explicit/inherited snapshots. Grok, OpenAI, and Claude can share one home. See [current scope](USAGE.md#scope-shared-files-caller-only-live-changes). The analysis below is historical, not the current routing contract.
+
+## Historical executive conclusion
 
 `/jb:odd-models <profile>` changes **shared model-routing configuration** and updates the **invoking Pi session**. It is not a session-isolated profile selector. Other Pi instances sharing the same `PI_HOME` can observe the saved routing, but the command does not broadcast a reload or replace their live conversation model.
 

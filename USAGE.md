@@ -49,7 +49,7 @@ For profile definitions rather than a duplicated model catalog, consult the [man
 
 ## Scope: shared files, caller-only live changes
 
-This is not a session-local profile selector. Sessions using the same configuration paths share the saved canonical and runtime mappings. Selecting a profile changes those shared files and aligns the invoking live orchestrator; only the caller reloads. Other sessions are not observed, and their refresh timing is not guaranteed. No live broadcast or independent session routing is provided.
+Selecting a profile changes shared canonical/runtime defaults, aligns only the invoking live orchestrator, and binds its subagents to a session-ID scoped Gentle profile snapshot. Other open sessions keep their own explicit or inherited startup snapshot across `/reload`; there is no cross-terminal model-change broadcast. New or resumed sessions resolve current defaults again. Already queued/running children retain their captured routing.
 
 The packaged manifest manages 13 roles:
 
@@ -61,7 +61,11 @@ The packaged manifest manages 13 roles:
 
 Switches preserve unrelated canonical keys, runtime top-level keys, and unrelated `model_profiles` entries. The historical 13 retired `sdd-*` keys are removed during switching or installation. The manifest, not a fixed role count in the command, defines coverage.
 
-To use different profiles at the same time, run each instance in a separate Pi home; see [three routing lanes](#run-three-independent-routing-lanes).
+Grok, OpenAI, and Claude can run in different Pi instances sharing the same home: select the desired profile inside each instance. Separate [routing lane homes](#run-three-independent-routing-lanes) are optional when you also want separate persisted defaults.
+
+Gentle alignment preserves unmanaged routes from the invoking explicit binding, then its inherited startup snapshot. With neither, it uses global runtime routes plus `<cwd>/.pi/subagents.json` field-level overrides. Managed assignments replace only the managed roles; retired `sdd-*` routes are removed. Updating a saved same-name Gentle profile preserves its custom routes. A missing `profiles.json` is never created.
+
+Explicit extension paths take precedence. An injected `piHome` or nonempty `PI_HOME` retains this plugin's sandbox layout. Without one, `GENTLE_PI_CONFIG_HOME` selects Gentle config and `GENTLE_PI_AGENT_HOME`, then `PI_CODING_AGENT_DIR`, selects runtime agent home. Empty environment values fall through. This adapter targets the standard installed Gentle layout, not bundled config-home deployments.
 
 ## Model picker navigation
 

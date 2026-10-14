@@ -35,6 +35,9 @@ import { runProfileEditor } from "./model-profiles/editor.ts";
 import {
   alignGentleProfileStore,
   bindGentleSessionProfile,
+  gentleSessionRouting,
+  mergeGentleRouting,
+  normalizeGentleRouting,
   readGentleProfileStore,
   type GentleProfileStore,
   type GentleRouting,
@@ -81,13 +84,15 @@ function hasOwnKey(value: JsonObject, key: string): boolean {
 }
 
 function resolvePaths(options: ModelProfileExtensionOptions = {}): ResolvedPaths {
-  const piHome = resolve(options.piHome ?? process.env.PI_HOME ?? join(homedir(), ".pi"));
-  const gentleDir = resolve(options.gentleDir ?? join(piHome, "gentle-ai"));
+  const customHome = options.piHome ?? (process.env.PI_HOME || undefined);
+  const piHome = resolve(customHome ?? join(homedir(), ".pi"));
+  const gentleDir = resolve(options.gentleDir ?? (customHome ? join(piHome, "gentle-ai") : process.env.GENTLE_PI_CONFIG_HOME || join(piHome, "gentle-ai")));
+  const agentHome = customHome ? join(piHome, "agent") : process.env.GENTLE_PI_AGENT_HOME || process.env.PI_CODING_AGENT_DIR || join(piHome, "agent");
   return {
     piHome,
     gentleDir,
     canonicalPath: resolve(options.canonicalPath ?? join(gentleDir, "models.json")),
-    runtimePath: resolve(options.runtimePath ?? join(piHome, "agent", "subagents.json")),
+    runtimePath: resolve(options.runtimePath ?? join(agentHome, "subagents.json")),
     manifestPath: resolve(options.manifestPath ?? join(gentleDir, "model-profiles.manifest.json")),
     gentleProfilesPath: join(gentleDir, "profiles.json"),
   };
@@ -614,7 +619,7 @@ function invokingSessionId(ctx: unknown): string | undefined {
  * name is the preferred profile, else the registered profile the routing matches.
  * Returns whether profiles.json changed.
  */
-async function alignGentleProfiles(paths: ResolvedPaths, store: GentleProfileStore | undefined, sessionId: string | undefined, preferredName?: string): Promise<boolean> {
+async function alignGentleProfiles(paths: ResolvedPaths, store: GentleProfileStore | undefined, sessionId: string | undefined, preferredName?: string, cwd?: string): Promise<boolean> {
   const registry = await loadRegistry(paths);
   const state = await readActiveState(paths, registry.manifest, false);
   const routing: GentleRouting = Object.fromEntries(managedAgents(registry.manifest).map((agent) => [agent, { ...state.canonicalEntries[agent]! }]));
@@ -622,14 +627,26 @@ async function alignGentleProfiles(paths: ResolvedPaths, store: GentleProfileSto
   const candidates = preferredName ? [preferredName, ...names] : names;
   const name = candidates.find((candidate) => profileMatchesState(state, deriveCanonicalProfileForSelection(candidate, registry.profiles, registry.manifest), registry.manifest))
     ?? UNREGISTERED_GENTLE_PROFILE;
-  if (sessionId) bindGentleSessionProfile(sessionId, name, routing);
+  if (sessionId) {
+    let baseline = gentleSessionRouting(sessionId);
+    if (baseline === undefined) {
+      baseline = normalizeGentleRouting(state.runtime.model_profiles);
+      if (cwd) {
+        // Gentle ignores absent or malformed project config, retaining global routing.
+        let project: unknown;
+        try { project = JSON.parse(await readFile(join(cwd, ".pi", "subagents.json"), "utf8")); } catch { project = undefined; }
+        baseline = mergeGentleRouting(baseline, normalizeGentleRouting(isJsonObject(project) ? project.model_profiles : undefined));
+      }
+    }
+    bindGentleSessionProfile(sessionId, name, { ...baseline, ...routing });
+  }
   return store ? alignGentleProfileStore(store, name, routing) : false;
 }
 
 /** Gentle alignment after undo or recovery: failures are reported, never rolled back. */
-async function alignGentleProfilesAfter(paths: ResolvedPaths, ctx: { ui: { notify(message: string, level: "info" | "warning" | "error"): void } }): Promise<void> {
+async function alignGentleProfilesAfter(paths: ResolvedPaths, ctx: { cwd?: string; ui: { notify(message: string, level: "info" | "warning" | "error"): void } }): Promise<void> {
   try {
-    await alignGentleProfiles(paths, await readGentleProfileStore(paths.gentleProfilesPath), invokingSessionId(ctx));
+    await alignGentleProfiles(paths, await readGentleProfileStore(paths.gentleProfilesPath), invokingSessionId(ctx), undefined, ctx.cwd);
   } catch (error) {
     ctx.ui.notify(`Gentle profile alignment failed (${error instanceof Error ? error.message : String(error)}); subagents may keep the previous Gentle profile until /gentle:profiles selects one.`, "warning");
   }
@@ -894,7 +911,7 @@ export default function oddModelProfiles(pi: ExtensionAPI, options: ModelProfile
         } catch (error) { await restore(error); }
         // The switch is committed and the session aligned: a Gentle failure is reported, not rolled back.
         try {
-          gentleChanged = await alignGentleProfiles(paths, gentleStore, invokingSessionId(ctx), parsed.name);
+          gentleChanged = await alignGentleProfiles(paths, gentleStore, invokingSessionId(ctx), parsed.name, ctx.cwd);
         } catch (error) {
           ctx.ui.notify(`Gentle profile alignment failed (${error instanceof Error ? error.message : String(error)}); subagents may keep the previous Gentle profile until /gentle:profiles selects one.`, "warning");
         }

@@ -122,7 +122,7 @@ async function snapshotTree(root: string): Promise<Array<{ path: string; type: "
   return records;
 }
 
-async function createHarness() {
+async function createHarness(useEnvironment = false) {
   const root = await mkdir(join(tmpdir(), `odd-model-profiles-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`), { recursive: true });
   const piHome = root;
   const gentleDir = join(piHome, "gentle-ai");
@@ -171,7 +171,12 @@ async function createHarness() {
     getThinkingLevel: () => thinking,
     setThinkingLevel: (level: string) => { thinkingCalls.push(level); thinking = level; },
   };
-  oddModelProfiles(pi as any, { piHome });
+  if (useEnvironment) {
+    process.env.GENTLE_PI_CONFIG_HOME = gentleDir;
+    process.env.GENTLE_PI_AGENT_HOME = agentDir;
+    delete process.env.PI_HOME;
+  }
+  oddModelProfiles(pi as any, useEnvironment ? {} : { piHome });
   const command = commands.get("jb:odd-models");
   assert.ok(command);
 
@@ -976,7 +981,7 @@ test("switch binds the invoking session to the selected Gentle profile without t
   await h.command.handler("local", h.ctx);
   const binding = gentleBindings().get(sessionId);
   const { orchestrator: _orchestrator, ...roles } = selectedProfile("local", "medium", "local", "medium");
-  assert.deepEqual(binding, { name: "local", modelProfiles: roles });
+  assert.deepEqual(binding, { name: "local", modelProfiles: { ...roles, unrelatedAgent: { model: "keep/runtime", thinking: "low" } } });
   gentleBindings().delete(sessionId);
 });
 
@@ -988,4 +993,104 @@ test("undo moves the active Gentle profile back to the restored routing", async 
   const store = await readJson(path);
   assert.equal(store.active, "openai");
   assert.deepEqual(store.profiles.openai, selectedProfile("openai-codex", "high", "xai", "xhigh"));
+});
+
+test("switch preserves same-name saved custom routes and prunes retired roles", async () => {
+  const h = await createHarness();
+  const path = await seedGentleProfiles(h, { kind: gentleProfilesKind, version: 1, profiles: {
+    local: { custom: { model: "custom/saved", thinking: "low" }, [RETIRED_MANAGED_AGENTS[0]]: { model: "old/model" } },
+  } });
+  await h.command.handler("local", h.ctx);
+  const store = await readJson(path);
+  assert.equal(store.active, "local");
+  assert.deepEqual(store.profiles.local.custom, { model: "custom/saved", thinking: "low" });
+  assert.equal(Object.hasOwn(store.profiles.local, RETIRED_MANAGED_AGENTS[0]), false);
+  assert.deepEqual(store.profiles.local.orchestrator, { model: "local/orchestrator", thinking: "medium" });
+  assert.equal(h.notifications.at(-1)?.level, "info");
+});
+
+for (const baseline of ["explicit", "frozen", "runtime"]) test(`switch preserves ${baseline} custom routes in effective launches`, async () => {
+  const h = await createHarness();
+  const id = `compat-${baseline}-${h.root}`;
+  (h.ctx as any).sessionManager = { getSessionId: () => id };
+  const freezeKey = Symbol.for("gentle-pi:session-profile-freeze");
+  const holder = globalThis as any;
+  holder[freezeKey] ??= { frozen: new Map(), notified: new Map() };
+  const routes = { custom: { model: "custom/session", thinking: "low" }, [RETIRED_MANAGED_AGENTS[0]]: { model: "old/model" } };
+  if (baseline === "explicit") gentleBindings().set(id, { name: "previous", modelProfiles: routes });
+  if (baseline === "frozen") holder[freezeKey].frozen.set(id, { profile: { name: "previous", origin: "global", modelProfiles: routes } });
+  if (baseline === "runtime") {
+    await mkdir(join(h.root, ".pi"), { recursive: true });
+    await writeJson(join(h.root, ".pi", "subagents.json"), { model_profiles: { unrelatedAgent: { effort: "max" } } });
+  }
+  try {
+    await h.command.handler("local", h.ctx);
+    // Gentle's consumer replaces modelProfiles wholesale with this snapshot.
+    const effective = gentleBindings().get(id)!.modelProfiles as any;
+    if (baseline === "runtime") assert.deepEqual(effective.unrelatedAgent, { model: "keep/runtime", thinking: "max" });
+    else assert.deepEqual(effective.custom, { model: "custom/session", thinking: "low" });
+    assert.equal(Object.hasOwn(effective, RETIRED_MANAGED_AGENTS[0]), false);
+    assert.equal(Object.hasOwn(effective, "orchestrator"), false);
+    assert.deepEqual(effective["gentle-ai-worker"], { model: "local/gentle-ai-worker", thinking: "medium" });
+    assert.equal(h.notifications.at(-1)?.level, "info");
+  } finally {
+    gentleBindings().delete(id);
+    holder[freezeKey].frozen.delete(id);
+  }
+});
+
+test("default paths honor Gentle config and agent home overrides", async () => {
+  const keys = ["PI_HOME", "GENTLE_PI_CONFIG_HOME", "GENTLE_PI_AGENT_HOME", "PI_CODING_AGENT_DIR"];
+  const saved = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  try {
+    const h = await createHarness(true);
+    await h.command.handler("local", h.ctx);
+    assert.deepEqual((await readJson(h.canonicalPath)).orchestrator, { model: "local/orchestrator", thinking: "medium" });
+    assert.deepEqual((await readJson(h.runtimePath)).model_profiles.orchestrator, { model: "local/orchestrator", effort: "medium" });
+    assert.equal(h.notifications.at(-1)?.level, "info");
+  } finally {
+    for (const key of keys) if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+  }
+});
+
+test("Grok OpenAI and Claude sessions retain independent bindings in the same home", async () => {
+  const h = await createHarness();
+  const manifestPath = join(h.gentleDir, "model-profiles.manifest.json");
+  const manifest = await readJson(manifestPath);
+  manifest.profiles.push({ name: "claude", modelsFile: "models.claude.json" });
+  await writeJson(manifestPath, manifest);
+  await writeJson(join(h.gentleDir, "models.claude.json"), profile("anthropic", "high"));
+  const sessions = ["grok", "openai", "claude"].map(name => {
+    let model = { provider: "initial", id: "parent" };
+    let thinking = "low";
+    const id = `${h.root}-${name}`;
+    const commands = new Map<string, RegisteredCommand>();
+    oddModelProfiles({
+      registerCommand: (key: string, command: RegisteredCommand) => commands.set(key, command),
+      setModel: async (next: typeof model) => { model = next; return true; },
+      getThinkingLevel: () => thinking,
+      setThinkingLevel: (next: string) => { thinking = next; },
+    } as any, { piHome: h.root });
+    const ctx = { ...h.ctx, get model() { return model; }, sessionManager: { getSessionId: () => id } };
+    return { name, id, ctx, command: commands.get("jb:odd-models")!, current: () => ({ ...model }) };
+  });
+  try {
+    for (const session of sessions) await session.command.handler(session.name, session.ctx);
+    const bindings = sessions.map(session => structuredClone(gentleBindings().get(session.id)));
+    const models = sessions.map(session => session.current());
+    assert.deepEqual(models.map(model => model.provider), ["xai", "openai-codex", "anthropic"]);
+    assert.deepEqual(bindings.map(binding => binding?.name), ["grok", "openai", "claude"]);
+    for (const [index, session] of sessions.entries()) {
+      assert.deepEqual(gentleBindings().get(session.id), bindings[index]);
+      assert.deepEqual(session.current(), models[index]);
+    }
+    await sessions[1].command.handler("local", sessions[1].ctx);
+    for (const index of [0, 2]) {
+      assert.deepEqual(gentleBindings().get(sessions[index].id), bindings[index]);
+      assert.deepEqual(sessions[index].current(), models[index]);
+    }
+    assert.deepEqual(sessions[1].current(), { provider: "local", id: "orchestrator" });
+  } finally {
+    sessions.forEach(session => gentleBindings().delete(session.id));
+  }
 });

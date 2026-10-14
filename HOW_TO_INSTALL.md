@@ -48,7 +48,7 @@ The target must already contain `agent/`; this prevents accidentally installing 
 
 ### Two concurrent ODD lanes
 
-To run Pi instances at the same time with different ODD routing, each instance needs its own Pi home. Setup creates three lanes (opus with `claude-opus-5.5`, gpt with `openai6-1-gentle`, and grok with `grok-4-7`); launch only the ones you need, and they can run concurrently. Two `/jb:odd-models` selections against the same `PI_HOME` still collide: the last one wins for both instances. Four scripts set up and launch isolated lanes:
+Pi instances can share one home while using different profiles: select Grok, OpenAI, or Claude inside each running instance. The command binds only that session; other open sessions keep their Gentle snapshots. Shared defaults remain last-selected for new sessions, so separate homes are optional when persisted defaults must also be isolated. Setup creates three such lanes (opus with `claude-opus-5.5`, gpt with `openai6-1-gentle`, and grok with `grok-4-7`). Four scripts set up and launch isolated lanes:
 
 | Script | Purpose |
 | --- | --- |
