@@ -67,6 +67,23 @@ Gentle alignment preserves unmanaged routes from the invoking explicit binding, 
 
 Explicit extension paths take precedence. An injected `piHome` or nonempty `PI_HOME` retains this plugin's sandbox layout. Without one, `GENTLE_PI_CONFIG_HOME` selects Gentle config and `GENTLE_PI_AGENT_HOME`, then `PI_CODING_AGENT_DIR`, selects runtime agent home. Empty environment values fall through. This adapter targets the standard installed Gentle layout, not bundled config-home deployments.
 
+## Sol/Terra high profile
+
+Preview the packaged `terra6.1` profile without activating it:
+
+```text
+/jb:odd-models preview terra6.1
+```
+
+| Assignment | Model | Thinking |
+|---|---|---|
+| Orchestrator, verifier, all six review roles, JD judge A | `openai/gpt-6.1-sol` | high |
+| Explorer, worker, fix agent, JD judge B | `openai/gpt-6.1-terra` | high |
+
+Sol and Terra use the 6.1 routes listed by Pi. There is no automatic version fallback or upgrade; catalog listing does not establish availability in your installation or account. Both provider routes must be available in the target installation. The profile is unpaired, so automatic opposite-provider routing does not replace its split JD judges. These assignments are an evaluation preset, not measured quality or cost claims.
+
+After installing the updated package and checking availability with `/jb:odd-models doctor`, activate explicitly with `/jb:odd-models terra6.1`. Adding this definition does not change the packaged default or activate it.
+
 ## Model picker navigation
 
 In `/jb:odd-models edit`, the interactive **Model** dialog uses a bounded native list that adapts to terminal height. Use ↑/↓ to scroll through every available model, Enter to choose, or Esc to cancel. Fullscreen Pi can also route mouse-wheel events to this list; regular terminals retain their own mouse/scrollback behavior. RPC and UIs without custom components retain the standard selection dialog. Other editor dialogs are unchanged. Cancelling writes nothing; saving a named profile does not activate it.

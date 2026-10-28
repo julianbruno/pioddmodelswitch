@@ -1,12 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { selectModel } from "../extensions/model-profiles/model-selector.ts";
 
-// Exercise the shipped native component, not a select mock. Override for other Pi installations.
-const native = await import(process.env.PI_TUI_MODULE ?? pathToFileURL(join(homedir(), ".pi/agent/install/releases/1.1.0/node_modules/@earendil-works/pi-tui/dist/index.js")).href);
+// Exercise the installed native component, not a select mock. Explicit overrides take precedence.
+async function nativeModule(): Promise<string> {
+  if (process.env.PI_TUI_MODULE) return process.env.PI_TUI_MODULE;
+  const root = process.env.PI_MANAGED_INSTALL_ROOT || join(homedir(), ".pi/agent/install");
+  let version: string;
+  try {
+    version = (await readFile(join(root, "current-version"), "utf8")).trim();
+  } catch {
+    throw new Error("Cannot resolve the active Pi release; set PI_TUI_MODULE to the native pi-tui entrypoint.");
+  }
+  if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+    throw new Error("Invalid Pi current-version; set PI_TUI_MODULE to the native pi-tui entrypoint.");
+  }
+  return pathToFileURL(join(root, "releases", version, "node_modules/@earendil-works/pi-tui/dist/index.js")).href;
+}
+const native = await import(await nativeModule());
 const options = Array.from({ length: 80 }, (_, i) => `provider${i % 2}/model-${i} — Similar name`);
 const theme = { fg: (_: string, text: string) => text };
 

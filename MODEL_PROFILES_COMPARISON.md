@@ -1,6 +1,6 @@
 # Model profile comparison
 
-Choose by configured role allocation, not by the profile name. This snapshot compares all **27 registrations in manifest order**, including all **13 managed roles** per profile. The overview shows the Pi orchestrator assignment that selection would apply; it does not report the current live session. The default registration is **openaigentle**.
+Choose by configured role allocation, not by the profile name. This snapshot compares all **28 registrations in manifest order**, including all **13 managed roles** per profile. The overview shows the Pi orchestrator assignment that selection would apply; it does not report the current live session. The default registration is **openaigentle**.
 
 ## Choose or inspect
 
@@ -34,6 +34,7 @@ Each value is **model alias / exact thinking string**. Aliases preserve provider
 |---|---|
 | C56S | `openai-codex/gpt-5.6-sol` |
 | C56T | `openai-codex/gpt-5.6-terra` |
+| O61T | `openai/gpt-6.1-terra` |
 | C6L | `openai-codex/gpt-6-luna` |
 | C6S | `openai-codex/gpt-6-sol` |
 | O6L | `openai/gpt-6-luna` |
@@ -80,6 +81,7 @@ ODD allocation summarizes E, W, V and F; O is in the separate orchestrator colum
 | [fable5.1](config/models.fable5.1.json) | Fable / medium | E, W, F: **Fable / medium**<br>V: **Fable / high** | Self |
 | [open6.1revoopus5.5](config/models.open6.1revoopus5.5.json) | O61S / medium | E: **O6L / high**<br>W, F: **O61S / low**<br>V: **O61S / high** | Self |
 | [opus5.5revgpt6.1](config/models.opus5.5revgpt6.1.json) | Opus / medium | E, W, F: **Opus / medium**<br>V: **Opus / high** | Self |
+| [terra6.1](config/models.terra6.1.json) | O61S / high | E, W, F: **O61T / high**<br>V: **O61S / high** | Self |
 
 ## Detailed ODD assignments
 
@@ -114,6 +116,7 @@ These five roles remain from the selected profile even when its reviews are pair
 | fable5.1 | E, W, O, F: **Fable / medium**<br>V: **Fable / high** |
 | open6.1revoopus5.5 | E: **O6L / high**<br>W, F: **O61S / low**<br>V: **O61S / high**<br>O: **O61S / medium** |
 | opus5.5revgpt6.1 | E, W, O, F: **Opus / medium**<br>V: **Opus / high** |
+| terra6.1 | E, W, F: **O61T / high**<br>V, O: **O61S / high** |
 
 ## Raw versus effective reviews and judges
 
@@ -148,6 +151,7 @@ These five roles remain from the selected profile even when its reviews are pair
 | fable5.1 | Risk, Resilience, Reliability, Refuter, Validator, A, B: **Fable / high**<br>Readability: **Fable / medium** | Same as raw |
 | open6.1revoopus5.5 | Risk, Reliability, Validator, A: **O61S / high**<br>Resilience, Readability, Refuter, B: **Opus / high** | Same as raw |
 | opus5.5revgpt6.1 | Risk, Resilience, Reliability, Refuter, Validator, A: **Opus / high**<br>Readability: **Opus / medium**<br>B: **O61S / high** | Same as raw |
+| terra6.1 | Risk, Resilience, Readability, Reliability, Refuter, Validator, A: **O61S / high**<br>B: **O61T / high** | Same as raw |
 
 ### Exact directed review-source mapping
 
@@ -171,6 +175,8 @@ The manifest enables opposite-provider judges for the eight review/judge roles a
 | grok | openai |
 
 ## Important distinctions
+
+- **terra6.1:** Sol 6.1 high coordinates and controls verification and all six reviews; Terra 6.1 high explores, writes and fixes. JD judge A uses Sol 6.1 high; B uses Terra 6.1 high. It is unpaired. The model is listed in Pi’s catalog; access in a specific installation and account is unverified. No automatic version upgrade or measured performance advantage is implied.
 
 - **fable5.1:** all 13 roles use Fable. It copies the Opus profile's thinking pattern: E/W/O/F and Readability medium; V, the other five reviews and both judges high. It is unpaired.
 - **open6.1revoopus5.5:** ODD retains the OpenAI 6.1 gentle allocation (E O6L high, W/F O61S low, V O61S high, O O61S medium). The six reviews split **3/3**: Risk/Reliability/Validator use O61S high; Resilience/Readability/Refuter use Opus high. JD A uses O61S high and JD B Opus high. This explicit mixed definition is unpaired and is not an all-Opus review profile.

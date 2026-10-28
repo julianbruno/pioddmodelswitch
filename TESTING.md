@@ -4,7 +4,7 @@ This document explains how to test the plugin without launching a real Pi sessio
 
 ## Model picker headless checks
 
-`tests/model-selector.test.ts` runs the actual custom wrapper with Pi's native `SelectList`, using 80 similarly named models, keyboard and normalized wheel input, cancellation, resize, and terminal heights of 24, 5, 2, and 1 rows. It checks bounded rendering and selected-row visibility on every navigation step. No Pi session or provider is launched. The native module defaults to the Pi 1.1.0 release under the current home; set `PI_TUI_MODULE` to a native `pi-tui` module URL or absolute entrypoint for other installations. Missing native dependencies fail these checks rather than silently skipping them. Live terminal mouse routing remains a separate manual check.
+`tests/model-selector.test.ts` runs the actual custom wrapper with Pi's native `SelectList`, using 80 similarly named models, keyboard and normalized wheel input, cancellation, resize, and terminal heights of 24, 5, 2, and 1 rows. It checks bounded rendering and selected-row visibility on every navigation step. No Pi session or provider is launched. The native module defaults to the active managed Pi release recorded in `current-version` under `PI_MANAGED_INSTALL_ROOT`, or `~/.pi/agent/install` when unset. Set `PI_TUI_MODULE` to a native `pi-tui` module URL or absolute entrypoint to override this resolution, including for non-managed installations. Missing native dependencies fail these checks rather than silently skipping them. Live terminal mouse routing remains a separate manual check.
 
 ## Quick path
 

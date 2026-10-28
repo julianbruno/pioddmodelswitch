@@ -155,6 +155,10 @@
     {
       "name": "opus5.5revgpt6.1",
       "modelsFile": "models.opus5.5revgpt6.1.json"
+    },
+    {
+      "name": "terra6.1",
+      "modelsFile": "models.terra6.1.json"
     }
   ]
 }
