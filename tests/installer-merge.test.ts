@@ -108,6 +108,76 @@ exec ${JSON.stringify(process.execPath)} "$@"
   return execFileAsync(join(packageRoot, "install", "install.sh"), [], { env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, PI_HOME: piHome }, timeout: 120_000 });
 }
 
+test("default shell install refreshes existing homes, preserves active profiles and backs up replaced files", async () => {
+  const packageRoot = await copyPackageFixture();
+  const home = await tempRoot("installer-fanout");
+  const { manifest, profiles } = await expectedDefaultFrom(packageRoot);
+  const names = [".pi", ".pi-gpt", ".pi-grok", ".pi-opus"];
+  const selected = [manifest.defaultProfile, "terra6.1", "claude-opus-5.5", "openai6-1-gentle"];
+  const before = new Map<string, string>();
+  for (const [index, name] of names.entries()) {
+    const target = join(home, name);
+    await mkdir(join(target, "agent"), { recursive: true });
+    const active = deriveCanonicalProfileForSelection(selected[index], profiles, manifest);
+    await writeJson(join(target, "gentle-ai", "models.json"), active);
+    await writeJson(join(target, "gentle-ai", "model-profiles.manifest.json"), { stale: true });
+    before.set(name, await readFile(join(target, "gentle-ai", "models.json"), "utf8"));
+  }
+  const env = { ...process.env, HOME: home };
+  delete env.PI_HOME;
+  const { stdout, stderr } = await execFileAsync(join(packageRoot, "install", "install.sh"), [], { env });
+  assert.equal(stderr, "");
+  for (const [index, name] of names.entries()) {
+    const target = join(home, name);
+    assert.ok(stdout.includes(`Installed jb-odd-models into ${target}.\n`));
+    assert.ok(stdout.includes(`Active profile kept: ${selected[index]}.\n`));
+    assert.deepEqual(await readJson(join(target, "gentle-ai", "model-profiles.manifest.json")), manifest);
+    assert.deepEqual(await readJson(join(target, "gentle-ai", "models.terra6.1.json")), profiles["terra6.1"]);
+    assert.equal(await readFile(join(target, "gentle-ai", "models.json"), "utf8"), before.get(name));
+    const backups = await readdir(join(target, "backups"));
+    assert.equal(backups.length, 1);
+    assert.deepEqual(await readJson(join(target, "backups", backups[0], "gentle-ai", "model-profiles.manifest.json")), { stale: true });
+  }
+  const repeat = await execFileAsync(join(packageRoot, "install", "install.sh"), [], { env });
+  assert.equal(repeat.stderr, "");
+  assert.equal(repeat.stdout, names.map(name => `jb-odd-models is already installed in ${join(home, name)}; no files changed.\n`).join(""));
+  for (const name of names) assert.equal((await readdir(join(home, name, "backups"))).length, 1);
+});
+
+test("default shell install skips missing homes without creating them", async () => {
+  const packageRoot = await copyPackageFixture();
+  const home = await tempRoot("installer-missing-lanes");
+  await mkdir(join(home, ".pi-gpt", "agent"), { recursive: true });
+  const env = { ...process.env, HOME: home };
+  delete env.PI_HOME;
+  const { stdout, stderr } = await execFileAsync(join(packageRoot, "install", "install.sh"), [], { env });
+  assert.equal(stderr, "");
+  for (const name of [".pi", ".pi-grok", ".pi-opus"]) {
+    assert.ok(stdout.includes(`Skipped ${join(home, name)}: agent directory not found.\n`));
+    assert.equal(await exists(join(home, name)), false);
+  }
+  assert.ok(stdout.includes(`Installed jb-odd-models into ${join(home, ".pi-gpt")}.\n`));
+});
+
+test("explicit PI_HOME remains a single-target shell install", async () => {
+  const packageRoot = await copyPackageFixture();
+  const home = await tempRoot("installer-explicit-home");
+  for (const name of [".pi", ".pi-gpt", ".pi-grok", ".pi-opus"]) {
+    await mkdir(join(home, name, "agent"), { recursive: true });
+  }
+  const target = join(home, ".pi-gpt");
+  const { stdout, stderr } = await execFileAsync(join(packageRoot, "install", "install.sh"), [], {
+    env: { ...process.env, HOME: home, PI_HOME: target },
+  });
+  assert.equal(stderr, "");
+  assert.ok(stdout.startsWith(`Installed jb-odd-models into ${target}.\n`));
+  assert.equal(stdout.includes("Skipped"), false);
+  for (const name of [".pi", ".pi-grok", ".pi-opus"]) {
+    assert.deepEqual(await readdir(join(home, name)), ["agent"]);
+    assert.deepEqual(await readdir(join(home, name, "agent")), []);
+  }
+});
+
 test("packaged duplicate active and seed files are eliminated after equivalence proof", async () => {
   const { manifest, profiles } = await expectedDefaultFrom();
   assert.deepEqual(deriveCanonicalProfileForSelection(manifest.defaultProfile, profiles, manifest)["gentle-ai-verify"], profiles[manifest.defaultProfile]["gentle-ai-verify"]);

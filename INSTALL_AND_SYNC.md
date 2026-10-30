@@ -27,8 +27,9 @@ If the active profile is not `gpt-5.6-recommended`, switch to it:
 
 ## What the installer updates
 
-The installer syncs the repository's packaged profiles into Pi's home directory.
-By default that is `~/.pi`.
+Without a nonempty `PI_HOME`, the installer syncs packaged profiles into every existing home among `~/.pi`, `~/.pi-gpt`, `~/.pi-grok`, and `~/.pi-opus`. Missing `agent/` directories are reported and never created. An explicit `PI_HOME` updates only that home. Each target retains its registered active profile and gets its own backups; unmatched custom mappings fall back to the package default. Updates run sequentially and stop at the first error without reverting earlier homes.
+
+Creating/saving a profile or launching Pi does not synchronize other homes. The paths below show `~/.pi`; the same layout applies in each updated home.
 
 It writes or updates:
 

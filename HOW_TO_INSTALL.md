@@ -18,7 +18,9 @@ cd /path/to/pissdmodelswitch
 ./install/install.sh
 ```
 
-The installer writes:
+Without a nonempty `PI_HOME`, the installer refreshes each existing home in order: `~/.pi`, `~/.pi-gpt`, `~/.pi-grok`, and `~/.pi-opus`. A home must contain `agent/`; missing homes are reported and never created. An explicit `PI_HOME` restricts installation to that one destination. Updates stop at the first failure; earlier completed homes keep their updates and backups. If no homes exist, installation fails. Creating/saving a profile and launching Pi do not distribute changes.
+
+The installer writes the following paths in each home (shown for `~/.pi`):
 
 - `~/.pi/agent/extensions/jb-odd-model-profiles.ts`
 - helper modules under `~/.pi/agent/extensions/model-profiles/`

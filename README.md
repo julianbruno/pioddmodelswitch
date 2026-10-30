@@ -22,6 +22,8 @@ cd pissdmodelswitch
 /jb:odd-models doctor
 ```
 
+Without a nonempty `PI_HOME`, installation refreshes existing `~/.pi`, `~/.pi-gpt`, `~/.pi-grok`, and `~/.pi-opus` homes. Missing homes are skipped, registered active profiles are preserved, and replaced files are backed up per home. An explicit `PI_HOME` updates only that destination.
+
 For a non-default Pi home:
 
 ```sh

@@ -25,9 +25,23 @@ fi
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PACKAGE_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
-PI_HOME=${PI_HOME:-"$HOME/.pi"}
-
-[ -d "$PI_HOME/agent" ] || fail "Pi agent directory not found at $PI_HOME/agent. Install Gentle Pi first, or set PI_HOME to its Pi home."
 [ -f "$SCRIPT_DIR/model-profiles-install.ts" ] || fail "Package asset is missing: install/model-profiles-install.ts"
 
-PACKAGE_ROOT=$PACKAGE_ROOT PI_HOME=$PI_HOME exec node --experimental-strip-types "$SCRIPT_DIR/model-profiles-install.ts"
+# An explicit home is an isolation boundary (also used by setup-odd-lanes.sh).
+if [ -n "${PI_HOME:-}" ]; then
+  [ -d "$PI_HOME/agent" ] || fail "Pi agent directory not found at $PI_HOME/agent. Install Gentle Pi first, or set PI_HOME to its Pi home."
+  PACKAGE_ROOT=$PACKAGE_ROOT PI_HOME=$PI_HOME exec node --experimental-strip-types "$SCRIPT_DIR/model-profiles-install.ts"
+fi
+
+# Refresh installed homes only. Launching or saving a profile never fans out.
+installed=0
+for name in .pi .pi-gpt .pi-grok .pi-opus; do
+  target="$HOME/$name"
+  if [ ! -d "$target/agent" ]; then
+    printf 'Skipped %s: agent directory not found.\n' "$target"
+    continue
+  fi
+  PACKAGE_ROOT=$PACKAGE_ROOT PI_HOME=$target node --experimental-strip-types "$SCRIPT_DIR/model-profiles-install.ts"
+  installed=$((installed + 1))
+done
+[ "$installed" -gt 0 ] || fail "No existing Pi homes found. Install Gentle Pi first, or set PI_HOME to its Pi home."

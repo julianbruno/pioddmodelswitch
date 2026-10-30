@@ -21,7 +21,7 @@ Then run `/reload` in each open instance (or restart to resolve defaults anew) a
 ## Requirements
 
 - Gentle Pi is already installed.
-- `$PI_HOME/agent/` exists. If `PI_HOME` is unset, the installer uses `~/.pi`.
+- Each target contains an `agent/` directory. Without `PI_HOME`, the installer updates existing `~/.pi`, `~/.pi-gpt`, `~/.pi-grok`, and `~/.pi-opus` homes; missing homes are reported and never created.
 - Node.js 22.19.0 or newer is available as `node`.
 - Pi provider authentication is already configured for the providers you plan to use.
 
@@ -61,7 +61,9 @@ PI_HOME=/path/to/pi-home ./install/install.sh
 PI_HOME=/path/to/pi-home pi
 ```
 
-The target must already contain an `agent/` directory.
+An explicit nonempty `PI_HOME` updates only that target, which must already contain an `agent/` directory. This also applies when `PI_HOME` is exported in your shell; unset it to update all four default homes.
+
+Default updates run sequentially and stop at the first failure. Earlier successful homes remain updated, with their own backups; rerun after resolving the error. If no homes exist, installation fails without creating one. Creating/saving a profile or launching Pi does not synchronize other homes.
 
 With Gentle, a custom home also needs `PI_CODING_AGENT_DIR` and `GENTLE_PI_AGENT_HOME` set to `$PI_HOME/agent`, and `GENTLE_PI_CONFIG_HOME` set to `$PI_HOME/gentle-ai`; otherwise Pi and Gentle keep reading `~/.pi`. The lane launchers set all four; see [Two concurrent ODD lanes](HOW_TO_INSTALL.md#two-concurrent-odd-lanes).
 
