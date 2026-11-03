@@ -159,6 +159,10 @@
     {
       "name": "terra6.1",
       "modelsFile": "models.terra6.1.json"
+    },
+    {
+      "name": "astraterra6.1",
+      "modelsFile": "models.astraterra6.1.json"
     }
   ]
 }

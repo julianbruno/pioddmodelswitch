@@ -84,6 +84,21 @@ Sol and Terra use the 6.1 routes listed by Pi. There is no automatic version fal
 
 After installing the updated package and checking availability with `/jb:odd-models doctor`, activate explicitly with `/jb:odd-models terra6.1`. Adding this definition does not change the packaged default or activate it.
 
+### Astra/Terra variant
+
+`astraterra6.1` distributes roles between Astra and Terra, using `medium` thinking for two roles, `high` for ten, and `xhigh` only for the verifier:
+
+| Assignment | Model | Thinking |
+|---|---|---|
+| Verifier | `openai/gpt-6-astra` | xhigh |
+| Orchestrator, risk, reliability, refuter, JD judge A | `openai/gpt-6-astra` | high |
+| Worker, fix agent, resilience, validator, JD judge B | `openai/gpt-6.1-terra` | high |
+| Explorer, readability | `openai/gpt-6.1-terra` | medium |
+
+The profile is unpaired, so its split judges are preserved. The verifier's `xhigh` requires model support; configured thinking is not proof of provider execution. These assignments are not measured performance or cost guarantees.
+
+After installing the updated package and checking availability with `/jb:odd-models doctor`, preview with `/jb:odd-models preview astraterra6.1`, then activate explicitly with `/jb:odd-models astraterra6.1` if desired. Preview does not activate it.
+
 ## Model picker navigation
 
 In `/jb:odd-models edit`, the interactive **Model** dialog uses a bounded native list that adapts to terminal height. Use ↑/↓ to scroll through every available model, Enter to choose, or Esc to cancel. Fullscreen Pi can also route mouse-wheel events to this list; regular terminals retain their own mouse/scrollback behavior. RPC and UIs without custom components retain the standard selection dialog. Other editor dialogs are unchanged. Cancelling writes nothing; saving a named profile does not activate it.

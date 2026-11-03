@@ -159,7 +159,7 @@ test("packaged manifest defaults to openaigentle and registers named profiles pl
   const manifest = await packagedManifest();
   const catalog = await packagedNamedProfiles();
   const namedProfileNames = catalog.profiles.map((profile) => profile.name);
-  const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", "grok-4-7", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep", ...gpt61Profiles.map(({ name }) => name), "fable5.1", "open6.1revoopus5.5", "opus5.5revgpt6.1", "terra6.1"];
+  const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", "grok-4-7", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep", ...gpt61Profiles.map(({ name }) => name), "fable5.1", "open6.1revoopus5.5", "opus5.5revgpt6.1", "terra6.1", "astraterra6.1"];
   assert.ok(namedProfileNames.includes("gpt-5.5-powerful"));
 
   assert.equal(manifest.schemaVersion, 2);
@@ -611,6 +611,39 @@ test("canonical and runtime derivation are pure and map thinking to effort", asy
   assert.equal(defaultProfile["gentle-ai-verify"].thinking, originalResearchThinking);
 });
 
+
+test("astraterra6.1 balances Astra and Terra assignments and thinking", async () => {
+  const manifest = await packagedManifest();
+  const profiles = await packagedProfiles(manifest);
+  const name = "astraterra6.1";
+  const astra = "openai/gpt-6-astra";
+  const terra = "openai/gpt-6.1-terra";
+  const expected = {
+    "gentle-ai-explore": { model: terra, thinking: "medium" },
+    "gentle-ai-worker": { model: terra, thinking: "high" },
+    "jd-fix-agent": { model: terra, thinking: "high" },
+    "gentle-ai-verify": { model: astra, thinking: "xhigh" },
+    orchestrator: { model: astra, thinking: "high" },
+    "review-risk": { model: astra, thinking: "high" },
+    "review-resilience": { model: terra, thinking: "high" },
+    "review-readability": { model: terra, thinking: "medium" },
+    "review-reliability": { model: astra, thinking: "high" },
+    "review-refuter": { model: astra, thinking: "high" },
+    "review-validator": { model: terra, thinking: "high" },
+    "jd-judge-a": { model: astra, thinking: "high" },
+    "jd-judge-b": { model: terra, thinking: "high" },
+  };
+  assert.deepEqual(manifest.profiles.find((profile) => profile.name === name), {
+    name, modelsFile: "models.astraterra6.1.json",
+  });
+  assert.equal(manifest.defaultProfile, "openaigentle");
+  assert.deepEqual(manifest.oppositeProviderJudges.profilePairs, expectedOppositePairs);
+  assert.deepEqual(profiles[name], expected);
+  assert.deepEqual(deriveCanonicalProfileForSelection(name, profiles, manifest), expected);
+  assert.deepEqual(deriveRuntimeModelProfilesForSelection(name, profiles, manifest),
+    Object.fromEntries(Object.entries(expected).map(([agent, entry]) =>
+      [agent, { model: entry.model, effort: entry.thinking }])));
+});
 
 test("terra6.1 reserves Sol 6.1 for coordination and control with split JD judges", async () => {
   const manifest = await packagedManifest();
