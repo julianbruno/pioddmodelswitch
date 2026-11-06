@@ -91,4 +91,18 @@ Three standalone, unpaired profiles route every ODD role explicitly with `openai
 
 These profiles are not in `config/named-profiles.json` and have no opposite-provider pair, so judges and reviewers keep the reasoning route above. Select one with `/jb:odd-models gpt-6-1-recommended` (or `gpt-6-1-lowcost` / `gpt-6-1-powerful`) after confirming both models are available through your Pi provider. The default profile stays `openaigentle`.
 
+### NAN lanes
+
+Launch an already configured NAN home with `./scripts/pi-nan.sh`. It uses `$HOME/.pi-nan`, aligns all four Pi/Gentle home variables, and starts `pi --name nan`, forwarding any arguments. Override the home with `PI_LANE_NAN_HOME=/path/to/pi-home`; use `PI_LANE_DRY_RUN=1 ./scripts/pi-nan.sh` to print the resolved environment without starting Pi. The home must already contain an `agent/` directory; the launcher does not create, install, authenticate, or select a model profile. The existing setup and installer scripts do not automatically include `.pi-nan`; to install this package into a prepared NAN home, explicitly run `PI_HOME="$HOME/.pi-nan" ./install/install.sh`. Full preparation, activation, and per-home update steps are in [NAN lane](HOW_TO_INSTALL.md#nan-lane).
+
+Three standalone, unpaired profiles use only the two NAN model ids supplied by the user: `nan/glm5.3-flash` (GLM 5.3 Flash) and `nan/deepseek-v4-flash` (DeepSeek V4 Flash). Roles map to agents exactly as in the GPT-6.1 role table above.
+
+| Profile | Orchestrator | Reasoning | Code | Light |
+|---|---|---|---|---|
+| `nan-normal` | GLM medium | DeepSeek medium | GLM medium | GLM low |
+| `nan-powerful` | GLM high | DeepSeek high | DeepSeek high | GLM medium |
+| `nan-ultra` | DeepSeek max | DeepSeek max | DeepSeek max | GLM max |
+
+`nan-ultra` ("no limits") requests `max` thinking for every role, including GLM exploration. `max` is only the requested effort: it does not bypass provider quotas, context limits, or safety controls, and it is not proof that NAN supports `max` for these models. No benchmark superiority is claimed for any lane. These profiles have no opposite-provider pair and are not in `config/named-profiles.json`. Provider auth and model availability are not checked here; run `doctor` in the live installed Pi before selecting one with `/jb:odd-models nan-normal` (or `nan-powerful` / `nan-ultra`).
+
 It writes only the managed keys in the installed canonical and runtime mappings. Unrelated top-level JSON keys and unrelated `model_profiles` entries are preserved and reported by `doctor` rather than treated as errors.

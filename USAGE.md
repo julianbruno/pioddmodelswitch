@@ -386,6 +386,8 @@ This is also the environment pattern for manual launches after installing into t
 
 Override setup/launcher paths using `PI_LANE_SOURCE`, `PI_LANE_OPUS_HOME`, `PI_LANE_GPT_HOME`, and `PI_LANE_GROK_HOME`. For example, `PI_LANE_DRY_RUN=1 ./scripts/pi-grok.sh` prints the launch environment without starting Pi. These are routing lanes, not complete isolation: prompt history, skills, `/gentle:stats`, Engram, and pi-pretty's shared `fff` database remain shared. See [lane setup details](HOW_TO_INSTALL.md#two-concurrent-odd-lanes) and the [working example](ODD_LANES_EXAMPLE.md).
 
+A fourth launcher, `./scripts/pi-nan.sh` (home `~/.pi-nan`, override `PI_LANE_NAN_HOME`), works the same way, but setup and the installer's default fanout do not create or update that home. Prepare it once, install with `PI_HOME="$HOME/.pi-nan" ./install/install.sh`, then run `/jb:odd-models nan-normal` inside the NAN instance; see [NAN lane](HOW_TO_INSTALL.md#nan-lane). To update Pi (`pi update`, once) and extensions (`pi update --extensions`, once per home), see [Update Pi and extensions across homes](HOW_TO_INSTALL.md#update-pi-and-extensions-across-homes).
+
 ## Troubleshooting and limits
 
 | Symptom | Safe next step |

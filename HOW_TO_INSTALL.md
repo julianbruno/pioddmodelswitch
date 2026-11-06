@@ -56,7 +56,7 @@ The target must already contain `agent/`; this prevents accidentally installing 
 
 ### Two concurrent ODD lanes
 
-Pi instances can share one home while using different profiles: select Grok, OpenAI, or Claude inside each running instance. The command binds only that session; other open sessions keep their Gentle snapshots. Shared defaults remain last-selected for new sessions, so separate homes are optional when persisted defaults must also be isolated. Setup creates three such lanes (opus with `claude-opus-5.5`, gpt with `openai6-1-gentle`, and grok with `grok-4-7`). Four scripts set up and launch isolated lanes:
+Pi instances can share one home while using different profiles: select Grok, OpenAI, or Claude inside each running instance. The command binds only that session; other open sessions keep their Gentle snapshots. Shared defaults remain last-selected for new sessions, so separate homes are optional when persisted defaults must also be isolated. Setup creates three such lanes (opus with `claude-opus-5.5`, gpt with `openai6-1-gentle`, and grok with `grok-4-7`). These scripts set up and launch isolated lanes:
 
 | Script | Purpose |
 | --- | --- |
@@ -64,6 +64,7 @@ Pi instances can share one home while using different profiles: select Grok, Ope
 | `scripts/pi-opus.sh` | Launches `pi --name opus` with the opus lane home. |
 | `scripts/pi-gpt.sh` | Launches `pi --name gpt` with the gpt lane home. |
 | `scripts/pi-grok.sh` | Launches `pi --name grok` with the grok lane home. |
+| `scripts/pi-nan.sh` | Launches `pi --name nan` with the NAN lane home. Setup does not create this home; see [NAN lane](#nan-lane). |
 
 Stock Pi does not honor `PI_HOME` for extensions, auth, or subagents, and Gentle keeps its own homes. The launchers therefore export four variables before starting Pi:
 
@@ -88,6 +89,117 @@ Setup activates no profile; the selection happens inside each running instance. 
 Lanes started before the launchers exported the Gentle variables may hold global routing. Relaunch them with the current launchers and re-select the profile once (`/jb:odd-models <profile>`).
 
 Still shared between lanes: prompt history (`~/.pi/agent/history`), skills, `/gentle:stats`, the Engram server, and pi-pretty's `~/.pi/agent/pi-pretty/fff` database.
+
+### NAN lane
+
+`setup-odd-lanes.sh` creates only the opus, gpt, and grok lanes. A NAN lane must be prepared separately, then installed, then activated inside Pi. Neither the installer's default fanout (`~/.pi`, `~/.pi-gpt`, `~/.pi-grok`, `~/.pi-opus`), setup, nor the lane uninstaller touches `~/.pi-nan`.
+
+All four launchers at a glance:
+
+| Launcher | Default home | Override | Pi name |
+| --- | --- | --- | --- |
+| `scripts/pi-opus.sh` | `$HOME/.pi-opus` | `PI_LANE_OPUS_HOME` | `opus` |
+| `scripts/pi-gpt.sh` | `$HOME/.pi-gpt` | `PI_LANE_GPT_HOME` | `gpt` |
+| `scripts/pi-grok.sh` | `$HOME/.pi-grok` | `PI_LANE_GROK_HOME` | `grok` |
+| `scripts/pi-nan.sh` | `$HOME/.pi-nan` | `PI_LANE_NAN_HOME` | `nan` |
+
+Each launcher exports the four aligned variables shown above, forwards every argument to `pi` (for example `./scripts/pi-nan.sh --resume`), and prints the environment without starting Pi when `PI_LANE_DRY_RUN=1`. Each one refuses to start unless `<home>/agent` already exists. A launcher never creates a home, copies credentials, installs the plugin, authenticates models, or selects a profile.
+
+**1. Prepare a new home.** Run this once from the repository root. It reads the source without modifying it, uses private permissions, and refuses an existing destination (including symlinks). If the NAN home already exists, skip preparation and inspect it before installing or selecting a profile; do not overwrite it.
+
+```bash
+( # Bash subshell: a failure stops preparation, not your terminal
+set -euo pipefail
+umask 077
+SRC="$HOME/.pi"
+DEST="$HOME/.pi-nan"
+[ -d "$SRC/agent" ] || { echo "no $SRC/agent" >&2; exit 1; }
+[ ! -e "$DEST" ] && [ ! -L "$DEST" ] || { echo "destination exists: $DEST" >&2; exit 1; }
+SRC=$(cd "$SRC" && pwd -P)
+mkdir -m 700 "$DEST"
+mkdir -m 700 "$DEST/agent" "$DEST/gentle-ai"
+
+# Identity files, including credentials; never print their contents.
+for f in auth.json settings.json mcp.json models.json claude-bridge.json subagents.json; do
+  if [ -f "$SRC/agent/$f" ]; then
+    cp "$SRC/agent/$f" "$DEST/agent/$f"
+    chmod 600 "$DEST/agent/$f"
+  fi
+done
+
+# Gentle profiles and background-subagent config (dev-binary.json stays global).
+for f in background-subagents.json profiles.json; do
+  if [ -f "$SRC/gentle-ai/$f" ]; then
+    cp "$SRC/gentle-ai/$f" "$DEST/gentle-ai/$f"
+    chmod 600 "$DEST/gentle-ai/$f"
+  fi
+done
+
+# Routing base and extensions; do not copy source sessions.
+if [ ! -e "$DEST/agent/subagents.json" ]; then
+  printf '{}\n' > "$DEST/agent/subagents.json"
+fi
+if [ -d "$SRC/agent/extensions" ]; then
+  mkdir -m 700 "$DEST/agent/extensions"
+  cp -a "$SRC/agent/extensions/." "$DEST/agent/extensions/"
+  chmod 700 "$DEST/agent/extensions"
+fi
+
+# Bulky install dirs are shared through symlinks, not copied.
+for d in npm install bin; do
+  if [ -e "$SRC/agent/$d" ]; then
+    ln -s "$SRC/agent/$d" "$DEST/agent/$d"
+  fi
+done
+)
+```
+
+Sessions are not copied, so the NAN lane starts with an empty session history. Creating an empty directory such as `mkdir -p ~/.pi-nan/agent` satisfies the launcher check but does not configure extensions or NAN authentication. If preparation fails after creating the destination, stop and inspect the partial home rather than deleting it or rerunning blindly.
+
+**2. Install the plugin into that home only:**
+
+```bash
+PI_HOME="$HOME/.pi-nan" ./install/install.sh
+```
+
+Installation preserves a recognized active profile or applies the manifest default when no registered profile matches. A fresh home normally starts with the default, not a NAN profile. If `profiles.json` was copied, its inherited active profile is aligned by the selection command in the next step.
+
+**3. Activate inside the running lane:**
+
+```bash
+./scripts/pi-nan.sh
+# inside Pi:
+#   /jb:odd-models doctor
+#   /jb:odd-models nan-normal
+```
+
+The selection persists in `~/.pi-nan` for later launches. `nan-powerful` and `nan-ultra` are also available. `nan-ultra` requests `max` thinking for every role; that is a requested effort only, not a bypass of provider quotas, context limits, or safety controls, and not proof that NAN supports `max` for these models. The NAN provider authentication and model availability must already work in the copied `auth.json`/`models.json`; this package does not configure them.
+
+### Update Pi and extensions across homes
+
+If all homes use the same `pi` executable from `PATH`, update it once (independent executables must each be updated; externally managed installations such as Nix use their package manager):
+
+```bash
+pi update
+```
+
+Extensions are resolved per home, so run the extension update once per existing home with the four variables aligned:
+
+```bash
+( # stop at the first failed update and preserve its exit code
+for name in .pi .pi-gpt .pi-grok .pi-opus .pi-nan; do
+  h="$HOME/$name"
+  [ -d "$h/agent" ] || continue
+  PI_HOME="$h" PI_CODING_AGENT_DIR="$h/agent" \
+    GENTLE_PI_AGENT_HOME="$h/agent" GENTLE_PI_CONFIG_HOME="$h/gentle-ai" \
+    pi update --extensions || exit "$?"
+done
+)
+```
+
+For the current home only, `pi update --all` combines the Pi and extension updates; it does not walk other homes. If `pi update` fails, resolve that failure before running extension updates. Restart open instances after successful updates, then check `/jb:odd-models status` and `/jb:odd-models doctor` in each one.
+
+Lanes are not a sandbox. The `npm`, `install`, and `bin` symlinks point at the source home, so package links in one home can share resources with the others, and an update through one home can change what the others load. Re-run `./install/install.sh` afterward to refresh this plugin in the default homes, and `PI_HOME="$HOME/.pi-nan" ./install/install.sh` for NAN, since no installer, setup, or uninstaller fanout includes NAN automatically.
 
 ## Backups and reinstall behavior
 
