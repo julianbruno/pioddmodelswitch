@@ -159,7 +159,7 @@ test("packaged manifest defaults to openaigentle and registers named profiles pl
   const manifest = await packagedManifest();
   const catalog = await packagedNamedProfiles();
   const namedProfileNames = catalog.profiles.map((profile) => profile.name);
-  const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", "grok-4-7", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep", ...gpt61Profiles.map(({ name }) => name), "fable5.1", "open6.1revoopus5.5", "opus5.5revgpt6.1", "terra6.1", "astraterra6.1"];
+  const expectedRegisteredNames = ["openai", "openaigentle", "openai6-1-gentle", "grok", "grok-4-7", ...namedProfileNames, "claude-opus-5.5", "claude-sep", "openai-sep", ...gpt61Profiles.map(({ name }) => name), "fable5.1", "open6.1revoopus5.5", "opus5.5revgpt6.1", "terra6.1", "astraterra6.1", "nan-normal", "nan-powerful", "nan-ultra"];
   assert.ok(namedProfileNames.includes("gpt-5.5-powerful"));
 
   assert.equal(manifest.schemaVersion, 2);
@@ -666,3 +666,32 @@ test("terra6.1 reserves Sol 6.1 for coordination and control with split JD judge
     Object.fromEntries(Object.entries(expected).map(([agent, entry]) =>
       [agent, { model: entry.model, effort: "high" }])));
 });
+
+const nanGlm = "nan/glm5.3-flash";
+const nanDeepseek = "nan/deepseek-v4-flash";
+const nanLanes = [
+  { name: "nan-normal", orchestrator: [nanGlm, "medium"], reasoning: [nanDeepseek, "medium"], code: [nanGlm, "medium"], light: [nanGlm, "low"] },
+  { name: "nan-powerful", orchestrator: [nanGlm, "high"], reasoning: [nanDeepseek, "high"], code: [nanDeepseek, "high"], light: [nanGlm, "medium"] },
+  { name: "nan-ultra", orchestrator: [nanDeepseek, "max"], reasoning: [nanDeepseek, "max"], code: [nanDeepseek, "max"], light: [nanGlm, "max"] },
+] as const;
+
+for (const lane of nanLanes) {
+  test(`${lane.name} registers exact NAN routes without opposite-provider overrides`, async () => {
+    const manifest = await packagedManifest();
+    const profiles = await packagedProfiles(manifest);
+    const expected: ValidatedModelProfile = {};
+    for (const [agents, route] of [
+      [["orchestrator"], lane.orchestrator],
+      [["gentle-ai-explore"], lane.light],
+      [["gentle-ai-worker", "jd-fix-agent"], lane.code],
+      [["gentle-ai-verify", ...expectedJudgeAgents], lane.reasoning],
+    ] as const) {
+      for (const agent of agents) expected[agent] = { model: route[0], thinking: route[1] };
+    }
+    assert.deepEqual(profiles[lane.name], expected);
+    assert.ok(!manifest.oppositeProviderJudges.profilePairs[lane.name]);
+    assert.deepEqual(deriveCanonicalProfileForSelection(lane.name, profiles, manifest), expected);
+    assert.deepEqual(deriveRuntimeModelProfilesForSelection(lane.name, profiles, manifest),
+      Object.fromEntries(Object.entries(expected).map(([agent, entry]) => [agent, { model: entry.model, effort: entry.thinking }])));
+  });
+}

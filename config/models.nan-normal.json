@@ -1,0 +1,15 @@
+{
+  "gentle-ai-explore": {"model": "nan/glm5.3-flash", "thinking": "low"},
+  "gentle-ai-worker": {"model": "nan/glm5.3-flash", "thinking": "medium"},
+  "jd-fix-agent": {"model": "nan/glm5.3-flash", "thinking": "medium"},
+  "gentle-ai-verify": {"model": "nan/deepseek-v4-flash", "thinking": "medium"},
+  "orchestrator": {"model": "nan/glm5.3-flash", "thinking": "medium"},
+  "review-risk": {"model": "nan/deepseek-v4-flash", "thinking": "medium"},
+  "review-resilience": {"model": "nan/deepseek-v4-flash", "thinking": "medium"},
+  "review-readability": {"model": "nan/deepseek-v4-flash", "thinking": "medium"},
+  "review-reliability": {"model": "nan/deepseek-v4-flash", "thinking": "medium"},
+  "review-refuter": {"model": "nan/deepseek-v4-flash", "thinking": "medium"},
+  "review-validator": {"model": "nan/deepseek-v4-flash", "thinking": "medium"},
+  "jd-judge-a": {"model": "nan/deepseek-v4-flash", "thinking": "medium"},
+  "jd-judge-b": {"model": "nan/deepseek-v4-flash", "thinking": "medium"}
+}

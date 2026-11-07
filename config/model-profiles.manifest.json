@@ -163,6 +163,18 @@
     {
       "name": "astraterra6.1",
       "modelsFile": "models.astraterra6.1.json"
+    },
+    {
+      "name": "nan-normal",
+      "modelsFile": "models.nan-normal.json"
+    },
+    {
+      "name": "nan-powerful",
+      "modelsFile": "models.nan-powerful.json"
+    },
+    {
+      "name": "nan-ultra",
+      "modelsFile": "models.nan-ultra.json"
     }
   ]
 }

@@ -382,3 +382,47 @@ test("launchers fail when the lane agent directory is missing", async () => {
   assert.match(grokResult.stderr, /^pi-grok: /);
   assert.match(grokResult.stderr, /nope3/);
 });
+
+const nanLauncher = join(packageRoot, "scripts", "pi-nan.sh");
+
+test("NAN launcher exports default and overridden homes without starting Pi", async () => {
+  const home = await tempRoot("nan-launcher");
+  for (const lane of [join(home, ".pi-nan"), join(home, "custom nan")]) {
+    await mkdir(join(lane, "agent"), { recursive: true });
+    const overrides = lane === join(home, ".pi-nan") ? {} : { PI_LANE_NAN_HOME: lane };
+    const env = await laneEnv(home, { ...overrides, PI_LANE_DRY_RUN: "1" });
+    const result = await run("/bin/bash", [nanLauncher], env);
+    assert.deepEqual(result, {
+      code: 0,
+      stdout: `PI_HOME=${lane}\nPI_CODING_AGENT_DIR=${lane}/agent\nGENTLE_PI_AGENT_HOME=${lane}/agent\nGENTLE_PI_CONFIG_HOME=${lane}/gentle-ai\n`,
+      stderr: "",
+    });
+  }
+});
+
+test("NAN launcher rejects a missing agent directory without creating files", async () => {
+  const home = await tempRoot("nan-missing");
+  const before = await snapshotTree(home);
+  const result = await run("/bin/bash", [nanLauncher], await laneEnv(home));
+  assert.deepEqual(result, {
+    code: 1,
+    stdout: "",
+    stderr: `pi-nan: Lane agent directory not found at ${home}/.pi-nan/agent. Create the NAN lane agent directory and configure it before launching.\n`,
+  });
+  assert.deepEqual(await snapshotTree(home), before);
+});
+
+test("NAN launcher forwards arguments and the isolated environment to Pi", async () => {
+  const home = await tempRoot("nan-exec");
+  await mkdir(join(home, ".pi-nan", "agent"), { recursive: true });
+  const bin = join(home, "bin");
+  await mkdir(bin);
+  await writeFile(join(bin, "pi"), '#!/bin/bash\nprintf "%s\\n" "$PI_HOME" "$PI_CODING_AGENT_DIR" "$GENTLE_PI_AGENT_HOME" "$GENTLE_PI_CONFIG_HOME" "$@"\nprintf "fake pi error\\n" >&2\nexit 7\n', { mode: 0o755 });
+  const env = await laneEnv(home, { PATH: `${bin}:${process.env.PATH}` });
+  const result = await run("/bin/bash", [nanLauncher, "--model", "nan/glm5.3-flash", "two words"], env);
+  assert.deepEqual(result, {
+    code: 7,
+    stdout: `${home}/.pi-nan\n${home}/.pi-nan/agent\n${home}/.pi-nan/agent\n${home}/.pi-nan/gentle-ai\n--name\nnan\n--model\nnan/glm5.3-flash\ntwo words\n`,
+    stderr: "fake pi error\n",
+  });
+});
